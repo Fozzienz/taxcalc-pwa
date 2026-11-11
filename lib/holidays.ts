@@ -19,7 +19,11 @@ function holiday(
 }
 
 /**
- * Observed Queensland public holidays for 2025, 2026, and 2027.
+ * Observed Queensland public holidays for 2025, 2026, 2027, and January–June 2028.
+ * January–June 2028 covers the rest of the 2027–28 income year. Those dates use the
+ * same Holidays Act rules as the published tables: Easter from the Gregorian computus,
+ * Labour Day on the first Monday in May, and an extra New Year holiday when 1 January
+ * is a weekend.
  * Dates follow the Queensland Government tables. Ekka is Brisbane-area only.
  * Christmas Eve is a part-day holiday from 6pm. Anzac Day moves to Monday
  * only when 25 April is a Sunday. Australia Day moves to Monday when 26 January
@@ -71,6 +75,16 @@ export const HOLIDAYS: readonly Holiday[] = [
   holiday("2027-12-26", "Boxing Day", "national"),
   holiday("2027-12-27", "Christmas Day holiday", "qld", "Additional public holiday because Christmas Day is a Saturday."),
   holiday("2027-12-28", "Boxing Day holiday", "qld", "Additional public holiday because Boxing Day is a Sunday."),
+
+  holiday("2028-01-01", "New Year's Day", "national"),
+  holiday("2028-01-03", "New Year's Day holiday", "qld", "Additional public holiday because New Year's Day is a Saturday."),
+  holiday("2028-01-26", "Australia Day", "national"),
+  holiday("2028-04-14", "Good Friday", "national"),
+  holiday("2028-04-15", "The day after Good Friday", "qld"),
+  holiday("2028-04-16", "Easter Sunday", "qld"),
+  holiday("2028-04-17", "Easter Monday", "national"),
+  holiday("2028-04-25", "Anzac Day", "national"),
+  holiday("2028-05-01", "Labour Day", "qld"),
 ];
 
 const HOLIDAY_BY_DATE = new Map(HOLIDAYS.map((item) => [item.date, item]));

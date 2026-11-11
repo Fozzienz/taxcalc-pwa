@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import type { TextScale, ThemePreference } from "@/lib/display";
 
@@ -100,6 +101,19 @@ export function MenuDrawer({
             </div>
             <p className="text-xs leading-5 text-fog">Theme and text size apply across TaxTrack on this device.</p>
           </section>
+          <Link
+            href="/faq"
+            onClick={onClose}
+            className="flex w-full items-center justify-between rounded-lg border border-line bg-ink/40 px-3 py-2.5 text-left transition hover:border-mint/40"
+          >
+            <span>
+              <span className="block text-sm font-semibold">Help and disclaimers</span>
+              <span className="mt-0.5 block text-xs text-fog">How to use TaxTrack, and what it does not do</span>
+            </span>
+            <span className="text-mint" aria-hidden>
+              ›
+            </span>
+          </Link>
           <button
             type="button"
             onClick={onBackup}

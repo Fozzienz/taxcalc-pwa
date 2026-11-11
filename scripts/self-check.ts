@@ -1,7 +1,7 @@
 import { assetTreatment, yearById } from "../lib/ato-rules";
 import { backupFilename, mergeBackups, validateBackup } from "../lib/backup";
 import { calculateClaims } from "../lib/calculations";
-import { calendarCells, isWeekend, monthsOf } from "../lib/dates";
+import { calendarCells, financialYearIdFor, isWeekend, monthsOf, visibleFinancialYears } from "../lib/dates";
 import { holidayOn } from "../lib/holidays";
 import { deductionCents, portionCents, toCents } from "../lib/money";
 import { buildSummary } from "../lib/summary";
@@ -38,6 +38,15 @@ assert(holidayOn("2025-01-27")?.name === "Australia Day", "2025 Australia Day ob
 assert(holidayOn("2026-04-25")?.name === "Anzac Day", "2026 Anzac Day stays on Saturday");
 assert(holidayOn("2027-04-26")?.name === "Anzac Day", "2027 Anzac Day observed Monday");
 assert(holidayOn("2027-04-25") === undefined, "25 April 2027 is not the observed holiday");
+assert(holidayOn("2028-01-01")?.scope === "national" && holidayOn("2028-01-03")?.scope === "qld", "2028 New Year Saturday gets a Monday holiday");
+assert(holidayOn("2028-04-16")?.name === "Easter Sunday", "2028 Easter Sunday");
+assert(holidayOn("2028-04-14")?.name === "Good Friday", "2028 Good Friday");
+assert(holidayOn("2028-04-25")?.name === "Anzac Day", "2028 Anzac Day stays on Tuesday");
+assert(holidayOn("2028-05-01")?.name === "Labour Day", "2028 Labour Day is the first Monday in May");
+assert(visibleFinancialYears(new Date(2026, 10, 11)).every((year) => year.id !== "2027-28"), "2027-28 is hidden before it starts");
+assert(visibleFinancialYears(new Date(2027, 6, 1)).some((year) => year.id === "2027-28"), "2027-28 appears on 1 July 2027");
+assert(financialYearIdFor(new Date(2026, 10, 11)) === "2026-27", "November 2026 is the 2026-27 income year");
+assert(financialYearIdFor(new Date(2027, 6, 1)) === "2027-28", "1 July 2027 is the 2027-28 income year");
 assert(holidayOn("2026-12-24")?.partDay === true, "Christmas Eve is part-day");
 assert(holidayOn("2026-12-28")?.scope === "qld", "2026 additional Boxing Day");
 assert(isWeekend("2026-04-25") === true, "Anzac Day 2026 is a Saturday");
@@ -187,5 +196,36 @@ const jpeg = validateBackup({
   },
 });
 assert(jpeg.ok && jpeg.data.years["2025-26"].expenses[0]?.receiptImage === "data:image/jpeg;base64,abcd", "a compressed JPEG is kept");
+const pdf = validateBackup({
+  app: "taxtrack",
+  version: 1,
+  activeYear: "2025-26",
+  settings: { defaultWfhHours: 7.6 },
+  years: {
+    "2025-26": {
+      dayLogs: [],
+      expenses: [{ ...expense({ id: "invoice", amount: 12, category: "other" }), receiptImage: "data:application/pdf;base64,JVBERg==" }],
+    },
+  },
+});
+assert(pdf.ok && pdf.data.years["2025-26"].expenses[0]?.receiptImage?.startsWith("data:application/pdf"), "a PDF invoice is kept");
+const word = validateBackup({
+  app: "taxtrack",
+  version: 1,
+  activeYear: "2027-28",
+  settings: { defaultWfhHours: 7.6 },
+  years: {
+    "2027-28": {
+      dayLogs: [],
+      expenses: [
+        {
+          ...expense({ id: "letter", amount: 12, category: "other", date: "2027-08-02" }),
+          receiptImage: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBA==",
+        },
+      ],
+    },
+  },
+});
+assert(word.ok, "a Word invoice in 2027-28 is kept");
 
 console.log("TaxTrack checks passed");

@@ -57,6 +57,15 @@ export const FINANCIAL_YEARS: readonly FinancialYear[] = [
     rateNote:
       "TaxTrack uses 70 cents an hour, the fixed rate published from 1 July 2024 and confirmed for 2024–25 and 2025–26. Confirm the 2026–27 rate before you lodge.",
   },
+  {
+    id: "2027-28",
+    label: "2027–28",
+    start: "2027-07-01",
+    end: "2028-06-30",
+    wfhCentsPerHour: WFH_CENTS_PER_HOUR,
+    rateNote:
+      "TaxTrack uses 70 cents an hour until the ATO publishes the 2027–28 fixed rate. Confirm the rate before you lodge.",
+  },
 ] as const;
 
 export const FIXED_RATE_INCLUDES = [
@@ -91,7 +100,7 @@ export const CATEGORY_HINTS: Record<ExpenseCategory, string> = {
 export type AssetTreatment = "not-an-asset" | "immediate" | "depreciating";
 
 export function isYearId(value: unknown): value is YearId {
-  return value === "2025-26" || value === "2026-27";
+  return value === "2025-26" || value === "2026-27" || value === "2027-28";
 }
 
 export function yearById(id: YearId): FinancialYear {

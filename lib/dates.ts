@@ -1,3 +1,4 @@
+import { FINANCIAL_YEARS } from "@/lib/ato-rules";
 import type { YearId } from "@/lib/types";
 
 const longDate = new Intl.DateTimeFormat("en-AU", {
@@ -67,11 +68,17 @@ export function isWithin(iso: string, start: string, end: string): boolean {
   return iso >= start && iso <= end;
 }
 
+/** Income years whose start date has arrived. 2027–28 stays hidden until 1 July 2027. */
+export function visibleFinancialYears(today = new Date()) {
+  const iso = toIsoDate(today);
+  return FINANCIAL_YEARS.filter((year) => year.start <= iso);
+}
+
 export function financialYearIdFor(today = new Date()): YearId {
-  const startYear = today.getMonth() >= 6 ? today.getFullYear() : today.getFullYear() - 1;
-  const id = `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
-  if (id === "2025-26" || id === "2026-27") return id;
-  return startYear < 2025 ? "2025-26" : "2026-27";
+  const iso = toIsoDate(today);
+  const visible = visibleFinancialYears(today);
+  const current = [...visible].reverse().find((year) => iso <= year.end);
+  return current?.id ?? visible.at(-1)?.id ?? "2025-26";
 }
 
 export function monthsOf(startIso: string, endIso: string): { year: number; month: number }[] {

@@ -12,12 +12,12 @@ import type {
 } from "@/lib/types";
 import { CATEGORIES } from "@/lib/types";
 import { createId } from "@/lib/id";
-import { isReceiptImage } from "@/lib/receiptImage";
+import { isReceiptFile } from "@/lib/receiptImage";
 
 export const BACKUP_NOTE =
-  "Private TaxTrack backup. Records and receipt photos stay in your browser until you export them.";
+  "Private TaxTrack backup. Records and receipt files stay in your browser until you export them.";
 
-export const BACKUP_FILE_LIMIT = 12_000_000;
+export const BACKUP_FILE_LIMIT = 40_000_000;
 
 export interface BackupExpense extends Expense {
   receiptImage?: string;
@@ -291,8 +291,8 @@ function validateExpenses(value: unknown, year: FinancialYear, errors: string[])
     }
     let receiptImage: string | undefined;
     if (item.receiptImage !== undefined && item.receiptImage !== null) {
-      if (!isReceiptImage(item.receiptImage)) {
-        push(errors, `${label} has a receipt photo that is not a compressed JPEG.`);
+      if (!isReceiptFile(item.receiptImage)) {
+        push(errors, `${label} has a receipt file that is not a JPEG photo, PDF, or Word document.`);
         return;
       }
       receiptImage = item.receiptImage;
@@ -346,7 +346,7 @@ export function validateBackup(value: unknown): ValidationResult {
     return { ok: false, errors };
   }
   for (const key of Object.keys(value.years)) {
-    if (!isYearId(key)) push(errors, `Unsupported income year "${key}". TaxTrack reads 2025-26 and 2026-27.`);
+    if (!isYearId(key)) push(errors, `Unsupported income year "${key}". TaxTrack reads 2025-26, 2026-27, and 2027-28.`);
   }
 
   const years = {} as BackupFile["years"];
