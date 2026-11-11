@@ -1,4 +1,4 @@
-export type YearId = "2025-26" | "2026-27";
+export type YearId = "2025-26" | "2026-27" | "2027-28";
 
 export type WorkMode = "wfh" | "office" | "leave" | "rdo";
 

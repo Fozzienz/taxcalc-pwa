@@ -2,6 +2,7 @@
 
 import { useMemo, useSyncExternalStore } from "react";
 import { yearById } from "@/lib/ato-rules";
+import { financialYearIdFor, visibleFinancialYears } from "@/lib/dates";
 import { backupToState, createEmptyState, mergeBackups, stateToBackup, validateBackup, type BackupFile } from "@/lib/backup";
 import { createId } from "@/lib/id";
 import { clearReceipts, deleteReceipt } from "@/lib/receiptStore";
@@ -101,18 +102,22 @@ function withYear(
 function createApi(snapshot: Snapshot) {
   if (!snapshot.hydrated) return { ready: false as const };
   const state = snapshot.state;
+  const activeYear = visibleFinancialYears().some((year) => year.id === state.activeYear)
+    ? state.activeYear
+    : financialYearIdFor();
   return {
     ready: true as const,
     state,
     notice: snapshot.notice,
-    year: yearById(state.activeYear),
-    yearData: state.years[state.activeYear],
+    year: yearById(activeYear),
+    yearData: state.years[activeYear],
     dismissNotice() {
       const current = getClientSnapshot();
       clientSnapshot = { ...current, notice: null };
       emit();
     },
     setYear(yearId: YearId) {
+      if (!visibleFinancialYears().some((year) => year.id === yearId)) return;
       update((current) => ({ ...current, activeYear: yearId }));
     },
     saveDay(yearId: YearId, log: DayLog) {

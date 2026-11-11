@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { useSyncExternalStore } from "react";
 import { AlertTriangle, ImagePlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { assetTreatment, CATEGORY_HINTS, type FinancialYear } from "@/lib/ato-rules";
 import { defaultEntryDate, formatMediumDate, isRealIsoDate, isWithin } from "@/lib/dates";
 import { createId } from "@/lib/id";
-import { compressReceipt } from "@/lib/receiptImage";
+import { prepareReceipt, receiptDownloadName, receiptKind, receiptLabel } from "@/lib/receiptImage";
 import { putReceipt, readCachedReceipt, subscribeReceipts } from "@/lib/receiptStore";
 import { formatMoney, portionCents, toCents } from "@/lib/money";
 import {
@@ -111,6 +111,8 @@ export function ExpenseManager({
   const [workLoads, setWorkLoads] = useState("");
   const [mixedLoads, setMixedLoads] = useState("");
   const [compressing, setCompressing] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepth = useRef(0);
   const [viewing, setViewing] = useState<string | null>(null);
   const storedReceipt = useReceipt(form.removeReceipt ? null : form.receiptId);
   const receiptPreview = form.pendingImage ?? storedReceipt;
@@ -151,7 +153,7 @@ export function ExpenseManager({
     setCompressing(true);
     setError(null);
     try {
-      const pendingImage = await compressReceipt(file);
+      const pendingImage = await prepareReceipt(file);
       setForm((current) => ({ ...current, pendingImage, removeReceipt: false }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "That photo could not be prepared.");
@@ -196,7 +198,7 @@ export function ExpenseManager({
       try {
         await putReceipt(receiptId, form.pendingImage);
       } catch {
-        setError("This browser could not store the receipt photo.");
+        setError("This browser could not store the receipt file.");
         return;
       }
     }
@@ -356,24 +358,53 @@ export function ExpenseManager({
               <input className={inputClass} maxLength={500} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
             </Field>
           </div>
-          <div className="rounded-lg border border-line bg-ink p-3">
-            <p className="text-sm font-medium">Receipt photo</p>
+          <div
+            className={cx(
+              "rounded-lg border bg-ink p-3 transition",
+              dragOver ? "border-dashed border-mint bg-mint/5" : "border-line",
+            )}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              dragDepth.current += 1;
+              setDragOver(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.dataTransfer.dropEffect = "copy";
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              dragDepth.current -= 1;
+              if (dragDepth.current <= 0) {
+                dragDepth.current = 0;
+                setDragOver(false);
+              }
+            }}
+            onDrop={(event: DragEvent<HTMLDivElement>) => {
+              event.preventDefault();
+              dragDepth.current = 0;
+              setDragOver(false);
+              const file = event.dataTransfer.files?.[0];
+              if (file) void attachReceipt(file);
+            }}
+          >
+            <p className="text-sm font-medium">Receipt or invoice</p>
             <p className="mt-1 text-xs leading-5 text-fog">
-              The photo stays in this browser. TaxTrack shrinks it to a JPEG so the writing stays readable, and the copy travels with a backup file.
+              Photos, PDFs, and Word documents stay in this browser. On a computer, drop the file in this box. Photos are shrunk to a readable JPEG. PDF and Word files are kept as they are, and the copy travels with a backup file.
             </p>
+            {dragOver ? <p className="mt-2 text-sm font-medium text-mint">Drop the file to attach it</p> : null}
             {receiptPreview ? (
-              <button type="button" className="mt-3 block" onClick={() => setViewing(receiptPreview)}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={receiptPreview} alt="Receipt preview" className="max-h-40 rounded-lg border border-line" />
+              <button type="button" className="mt-3 block text-left" onClick={() => setViewing(receiptPreview)}>
+                <ReceiptBody src={receiptPreview} compact />
               </button>
             ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <label className={cx(buttonClass.ghost, "cursor-pointer", compressing && "opacity-50")}>
-                <ImagePlus size={16} /> {compressing ? "Preparing photo…" : receiptPreview ? "Replace photo" : "Attach photo"}
+                <ImagePlus size={16} /> {compressing ? "Preparing file…" : receiptPreview ? "Replace file" : "Attach file"}
                 <input
                   className="sr-only"
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   disabled={compressing}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
@@ -388,7 +419,7 @@ export function ExpenseManager({
                   className={buttonClass.ghost}
                   onClick={() => setForm((current) => ({ ...current, pendingImage: null, removeReceipt: true }))}
                 >
-                  Remove photo
+                  Remove file
                 </button>
               ) : null}
             </div>
@@ -468,9 +499,8 @@ export function ExpenseManager({
         )}
       </Panel>
       {viewing ? (
-        <Modal title="Receipt photo" onClose={() => setViewing(null)} wide>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={viewing} alt="Receipt" className="w-full rounded-lg border border-line" />
+        <Modal title="Receipt" onClose={() => setViewing(null)} wide>
+          <ReceiptBody src={viewing} />
         </Modal>
       ) : null}
     </div>
@@ -481,10 +511,28 @@ function ReceiptThumb({ id, onOpen }: { id: string; onOpen: (src: string) => voi
   const src = useReceipt(id);
   if (!src) return null;
   return (
-    <button type="button" className="mt-2 block" onClick={() => onOpen(src)}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="" className="h-16 rounded-md border border-line" />
+    <button type="button" className="mt-2 block text-left" onClick={() => onOpen(src)}>
+      <ReceiptBody src={src} compact />
     </button>
+  );
+}
+
+function ReceiptBody({ src, compact = false }: { src: string; compact?: boolean }) {
+  const kind = receiptKind(src);
+  const label = receiptLabel(src);
+  if (kind === "image") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt={label} className={compact ? "h-16 rounded-md border border-line" : "max-h-[70vh] w-full rounded-lg border border-line object-contain"} />
+    );
+  }
+  if (kind === "pdf" && !compact) {
+    return <iframe title={label} src={src} className="h-[70vh] w-full rounded-lg border border-line bg-white" />;
+  }
+  return (
+    <a href={src} download={receiptDownloadName(src)} className="inline-flex rounded-lg border border-line px-3 py-2 text-sm font-semibold text-mint">
+      {compact ? label : `Download ${label.toLowerCase()}`}
+    </a>
   );
 }
 

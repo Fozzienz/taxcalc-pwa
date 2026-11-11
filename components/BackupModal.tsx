@@ -6,6 +6,7 @@ import {
   BACKUP_FILE_LIMIT,
   describeBackup,
   downloadBackup,
+  stateToBackup,
   validateBackup,
   type BackupFile,
 } from "@/lib/backup";
@@ -40,16 +41,7 @@ export function BackupModal({
   const [replaceArmed, setReplaceArmed] = useState(false);
   const [resetArmed, setResetArmed] = useState(false);
   const [hours, setHours] = useState(String(state.settings.defaultWfhHours));
-  const counts = describeBackup({
-    app: "taxtrack",
-    version: 1,
-    activeYear: state.activeYear,
-    settings: state.settings,
-    years: {
-      "2025-26": { dayLogs: Object.values(state.years["2025-26"].dayLogs), expenses: state.years["2025-26"].expenses },
-      "2026-27": { dayLogs: Object.values(state.years["2026-27"].dayLogs), expenses: state.years["2026-27"].expenses },
-    },
-  });
+  const counts = describeBackup(stateToBackup(state));
 
   async function exportData() {
     try {
@@ -57,7 +49,7 @@ export function BackupModal({
       setStatus(`Downloaded ${filename}`);
       setErrors([]);
     } catch {
-      setErrors(["The backup could not include a receipt photo. Try the export again."]);
+      setErrors(["The backup could not include a receipt file. Try the export again."]);
     }
   }
 
@@ -68,7 +60,7 @@ export function BackupModal({
     setStatus(null);
     if (!file) return;
     if (file.size > BACKUP_FILE_LIMIT) {
-      setErrors(["That file is larger than 12 MB."]);
+      setErrors(["That file is larger than 40 MB."]);
       return;
     }
     const reader = new FileReader();
@@ -105,7 +97,7 @@ export function BackupModal({
       setReady(null);
       setErrors([]);
     } catch {
-      setErrors(["The receipt photos in that file could not be stored in this browser."]);
+      setErrors(["The receipt files in that file could not be stored in this browser."]);
     }
   }
 
@@ -125,7 +117,7 @@ export function BackupModal({
   return (
     <Modal title="Data and backup" onClose={onClose} wide>
       <p className="text-sm leading-6 text-fog">
-        Records and receipt photos stay in this browser. Export a JSON file to move them to another phone or computer, then import them there.
+        Records and receipt files stay in this browser. Export a JSON file to move them to another phone or computer, then import them there.
       </p>
       {notice ? (
         <p className="mt-3 rounded-2xl border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-gold">

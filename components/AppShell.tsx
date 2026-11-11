@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { CalendarDays, DatabaseBackup, LayoutDashboard, Receipt, ShieldCheck } from "lucide-react";
-import { FINANCIAL_YEARS, DISCLAIMER } from "@/lib/ato-rules";
+import { DISCLAIMER } from "@/lib/ato-rules";
+import { visibleFinancialYears } from "@/lib/dates";
 import { buildSummary } from "@/lib/summary";
 import { useDisplay } from "@/hooks/useDisplay";
 import { useTaxStore } from "@/hooks/useTaxStore";
 import type { YearId } from "@/lib/types";
 import { BackupModal } from "@/components/BackupModal";
+import { BrandLogo } from "@/components/BrandLogo";
 import { CalendarView } from "@/components/CalendarView";
 import { Dashboard } from "@/components/Dashboard";
 import { DayLogModal } from "@/components/DayLogModal";
@@ -65,13 +67,8 @@ export function AppShell() {
       <header className="sticky top-0 z-40 border-b border-line bg-ink/95 backdrop-blur">
         <div className="mx-auto flex min-h-[4.5rem] w-full max-w-6xl items-center gap-3 px-4 py-2 sm:px-6">
           <div className="min-w-0">
-            <p className="text-[1.25rem] font-extrabold leading-none tracking-tight sm:text-[1.5rem]">
-              <span>Tax</span>
-              <span className="text-mint">Track</span>
-            </p>
-            <h1 className="mt-1 hidden font-mono text-[0.58rem] font-medium uppercase tracking-[0.22em] text-fog sm:block">
-              Australian tax and EOFY
-            </h1>
+            <h1 className="sr-only">Australian Tax and EOFY Calculator</h1>
+            <BrandLogo />
           </div>
           <div className="ml-auto flex items-center gap-2">
             <label className="sr-only" htmlFor="income-year">
@@ -80,10 +77,10 @@ export function AppShell() {
             <select
               id="income-year"
               className="min-h-10 rounded-lg border border-line bg-panel px-3 text-sm"
-              value={store.state.activeYear}
+              value={store.year.id}
               onChange={(event) => store.setYear(event.target.value as YearId)}
             >
-              {FINANCIAL_YEARS.map((year) => (
+              {visibleFinancialYears().map((year) => (
                 <option key={year.id} value={year.id}>
                   {year.label}
                 </option>

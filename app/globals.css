@@ -77,6 +77,18 @@ a {
   outline-offset: 2px;
 }
 
+.brand-logo-dark {
+  display: none;
+}
+
+html.dark .brand-logo-light {
+  display: none;
+}
+
+html.dark .brand-logo-dark {
+  display: contents;
+}
+
 .panel {
   border: 1px solid var(--line);
   background: var(--panel);
