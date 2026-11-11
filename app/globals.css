@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+/* Matches the StaxQ palette: slate surfaces, sky accent, gold highlight. */
+:root {
+  --ink: #f8fafc;
+  --panel: #ffffff;
+  --line: #e2e8f0;
+  --mint: #0284c7;
+  --gold: #d97706;
+  --rose: #e11d48;
+  --sky: #0ea5e9;
+  --fog: #64748b;
+  --paper: #0f172a;
+  color-scheme: light;
+}
+
+html.dark {
+  --ink: #070c18;
+  --panel: #0b1320;
+  --line: #243044;
+  --mint: #38bdf8;
+  --gold: #d4af37;
+  --rose: #fb7185;
+  --sky: #7dd3fc;
+  --fog: #94a3b8;
+  --paper: #e2e8f0;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-panel: var(--panel);
+  --color-line: var(--line);
+  --color-mint: var(--mint);
+  --color-gold: var(--gold);
+  --color-rose: var(--rose);
+  --color-sky: var(--sky);
+  --color-fog: var(--fog);
+  --color-paper: var(--paper);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-inter), ui-monospace, monospace;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--gold) 35%, transparent);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--paper) 6%, transparent);
+}
+
+.pb-safe {
+  padding-bottom: calc(0.55rem + env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
