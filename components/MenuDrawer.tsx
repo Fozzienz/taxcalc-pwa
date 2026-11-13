@@ -122,7 +122,7 @@ export function MenuDrawer({
               <span>
                 <span className="block text-sm font-semibold">Enable Rental Properties</span>
                 <span className="mt-0.5 block text-xs text-fog">
-                  {rentalsEnabled ? "Rentals is in the menu. Totals and reports include them." : "Hidden. Rental records stay on this device."}
+                  {rentalsEnabled ? "Rentals is in the menu. Totals and reports include them." : "Hidden. The records stay saved."}
                 </span>
               </span>
               <span className={rentalsEnabled ? "text-xs font-bold uppercase tracking-wider text-mint" : "text-xs font-bold uppercase tracking-wider text-fog"}>
@@ -137,7 +137,7 @@ export function MenuDrawer({
           >
             <span>
               <span className="block text-sm font-semibold">Account</span>
-              <span className="mt-0.5 block text-xs text-fog">Upload or download the encrypted copy</span>
+              <span className="mt-0.5 block text-xs text-fog">Change the password</span>
             </span>
             <span className="text-mint" aria-hidden>
               ›

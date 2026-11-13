@@ -3,6 +3,8 @@ import { createEmptyState } from "@/lib/backup";
 import type { AppState } from "@/lib/types";
 
 export const STORAGE_KEY = "taxtrack.v1";
+export const ACCOUNT_KEY = "taxtrack.account";
+export const PENDING_KEY = "taxtrack.pending";
 const LEGACY_KEY = "daybook.v1";
 const CORRUPT_KEY = "taxtrack.v1.corrupt";
 

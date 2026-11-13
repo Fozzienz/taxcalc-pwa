@@ -166,7 +166,7 @@ export function AuthScreen() {
           </button>
         ))}
       </div>
-      <p className="mt-4 text-sm leading-6 text-fog">An account is required. TaxTrack encrypts your records on this device. The server stores unreadable text.</p>
+      <p className="mt-4 text-sm leading-6 text-fog">An account is required. TaxTrack encrypts your records on this device before storing them. Signing in on another device opens the same records.</p>
       <form
         className="mt-4 grid gap-3"
         onSubmit={(event) => {

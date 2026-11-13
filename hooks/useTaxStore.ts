@@ -6,7 +6,8 @@ import { financialYearIdFor, visibleFinancialYears } from "@/lib/dates";
 import { backupToState, createEmptyState, mergeBackups, stateToBackup, validateBackup, type BackupFile } from "@/lib/backup";
 import { createId } from "@/lib/id";
 import { clearReceipts, deleteReceipt } from "@/lib/receiptStore";
-import { loadState, saveState, STORAGE_KEY } from "@/lib/storage";
+import { pullAccount, uploadDevice } from "@/lib/syncRecords";
+import { ACCOUNT_KEY, loadState, PENDING_KEY, saveState, STORAGE_KEY } from "@/lib/storage";
 import type { AppState, DayLog, DepreciatingAsset, Expense, RentalExpense, YearId } from "@/lib/types";
 
 interface Snapshot {
@@ -67,10 +68,116 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+let syncUserId: string | null = null;
+let syncRun = 0;
+let applyingRemote = false;
+let pushTimer: number | null = null;
+
+function noteSync(message: string) {
+  const current = getClientSnapshot();
+  clientSnapshot = { ...current, notice: message };
+  emit();
+}
+
+function rememberOwner(userId: string) {
+  window.localStorage.setItem(ACCOUNT_KEY, userId);
+}
+
+function schedulePush(userId: string) {
+  window.localStorage.setItem(PENDING_KEY, userId);
+  if (pushTimer !== null) window.clearTimeout(pushTimer);
+  const run = syncRun;
+  pushTimer = window.setTimeout(() => {
+    pushTimer = null;
+    if (syncUserId !== userId || syncRun !== run) return;
+    void uploadDevice(getClientSnapshot().state)
+      .then(() => {
+        if (syncUserId === userId && window.localStorage.getItem(PENDING_KEY) === userId) window.localStorage.removeItem(PENDING_KEY);
+      })
+      .catch(() => {
+        if (syncUserId === userId) noteSync("The account copy could not be saved. The records are still on this device and will be sent again.");
+      });
+  }, 700);
+}
+
+function replaceFromAccount(file: BackupFile) {
+  applyingRemote = true;
+  try {
+    commit({ state: backupToState(file), notice: null, hydrated: true });
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+function replaceWithEmpty(userId: string) {
+  applyingRemote = true;
+  try {
+    commit({ state: createEmptyState(), notice: null, hydrated: true });
+    rememberOwner(userId);
+    window.localStorage.removeItem(PENDING_KEY);
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+async function reconcile(userId: string, run: number) {
+  const current = () => run === syncRun && syncUserId === userId;
+  const remote = await pullAccount(current);
+  if (!current()) return;
+  const owner = window.localStorage.getItem(ACCOUNT_KEY);
+  const pending = window.localStorage.getItem(PENDING_KEY) === userId;
+  if (remote) {
+    if (pending && owner === userId) {
+      await uploadDevice(getClientSnapshot().state);
+      if (!current()) return;
+      window.localStorage.removeItem(PENDING_KEY);
+      return;
+    }
+    replaceFromAccount(remote);
+    rememberOwner(userId);
+    window.localStorage.removeItem(PENDING_KEY);
+    return;
+  }
+  if (owner && owner !== userId) {
+    if (!current()) return;
+    await clearReceipts();
+    if (!current()) return;
+    replaceWithEmpty(userId);
+    return;
+  }
+  rememberOwner(userId);
+  await uploadDevice(getClientSnapshot().state);
+  if (!current()) return;
+  window.localStorage.removeItem(PENDING_KEY);
+}
+
+/** Opens the account copy, then keeps later edits encrypted with the account. */
+export async function startAccountSync(userId: string): Promise<void> {
+  const run = ++syncRun;
+  syncUserId = userId;
+  try {
+    await reconcile(userId, run);
+  } catch {
+    if (run === syncRun && syncUserId === userId) {
+      noteSync("This account's records could not be opened. What is on this device was left as it is.");
+    }
+  }
+}
+
+export function stopAccountSync() {
+  syncRun += 1;
+  syncUserId = null;
+  if (pushTimer !== null) {
+    window.clearTimeout(pushTimer);
+    pushTimer = null;
+  }
+}
+
 function commit(next: Snapshot) {
   const saved = saveState(next.state);
   clientSnapshot = saved.ok ? next : { ...next, notice: saved.message };
   emit();
+  if (!applyingRemote && syncUserId) schedulePush(syncUserId);
 }
 
 function readMergedState(): AppState {

@@ -61,24 +61,28 @@ export async function uploadDevice(state: AppState): Promise<void> {
   }
 }
 
-export async function downloadDevice(): Promise<BackupFile> {
+export async function pullAccount(shouldContinue: () => boolean): Promise<BackupFile | null> {
   const { userIdReady, key } = requireSync();
   const userId = await userIdReady;
+  if (!shouldContinue()) return null;
   const db = supabase!;
   const { data, error } = await db.from("encrypted_records").select("ciphertext, iv").eq("user_id", userId).maybeSingle();
   if (error) throw error;
-  if (!data?.ciphertext || !data.iv) throw new Error("Nothing has been uploaded from an unlocked account yet.");
+  if (!data?.ciphertext || !data.iv) return null;
   const parsed = await decryptJson<unknown>(key, { ciphertext: data.ciphertext, iv: data.iv });
   const validated = validateBackup(parsed);
-  if (!validated.ok) throw new Error(validated.errors[0] ?? "The synced file could not be read.");
+  if (!validated.ok) throw new Error(validated.errors[0] ?? "The account copy could not be read.");
 
   const { data: receipts, error: receiptError } = await db.from("encrypted_receipts").select("id, ciphertext, iv").eq("user_id", userId);
   if (receiptError) throw receiptError;
-  await clearReceipts();
+  const files: { id: string; image: string }[] = [];
   for (const row of receipts ?? []) {
     if (!row.ciphertext || !row.iv) continue;
     const image = await decryptJson<unknown>(key, { ciphertext: row.ciphertext, iv: row.iv });
-    if (typeof image === "string") await putReceipt(String(row.id), image);
+    if (typeof image === "string") files.push({ id: String(row.id), image });
   }
+  if (!shouldContinue()) return null;
+  await clearReceipts();
+  for (const file of files) await putReceipt(file.id, file.image);
   return validated.data;
 }

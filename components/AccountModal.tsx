@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { KeyRound } from "lucide-react";
 import {
   accountError,
+  changePassword,
   fetchVaultProfileKeys,
   finishPasswordReset,
   sendPasswordReset,
@@ -13,23 +14,12 @@ import {
 } from "@/lib/account";
 import { unlockVaultWithPassword } from "@/lib/crypto/vaultCrypto";
 import { supabase, supabaseConfigured } from "@/lib/supabase/client";
-import { downloadDevice, uploadDevice } from "@/lib/syncRecords";
 import { clearPasswordRecovery, getVaultKey, passwordRecoveryPending, setVaultKey, subscribeVault } from "@/lib/vaultSession";
-import type { AppState } from "@/lib/types";
-import type { BackupFile } from "@/lib/backup";
 import { buttonClass, Field, inputClass, Modal } from "@/components/ui";
 
 type Mode = "signin" | "signup" | "forgot";
 
-export function AccountModal({
-  state,
-  onClose,
-  onReplace,
-}: {
-  state: AppState;
-  onClose: () => void;
-  onReplace: (file: BackupFile) => void;
-}) {
+export function AccountModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,8 +33,10 @@ export function AccountModal({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmUpload, setConfirmUpload] = useState(false);
-  const [confirmDownload, setConfirmDownload] = useState(false);
+  const [changing, setChanging] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [nextPassword, setNextPassword] = useState("");
+  const [confirmNext, setConfirmNext] = useState("");
 
   useEffect(() => {
     setUnlocked(getVaultKey() !== null);
@@ -153,27 +145,25 @@ export function AccountModal({
     }
   }
 
-  async function upload() {
-    setBusy(true);
+  async function savePassword() {
     setError(null);
-    try {
-      await uploadDevice(state);
-      setConfirmUpload(false);
-      setNotice("Uploaded. The synced copy is encrypted text. TaxTrack cannot read it on the server.");
-    } catch (caught) {
-      setError(accountError(caught));
-    } finally {
-      setBusy(false);
+    setNotice(null);
+    if (nextPassword.length < 8) {
+      setError("Use at least 8 characters.");
+      return;
     }
-  }
-
-  async function download() {
+    if (nextPassword !== confirmNext) {
+      setError("Those passwords do not match.");
+      return;
+    }
     setBusy(true);
-    setError(null);
     try {
-      onReplace(await downloadDevice());
-      setConfirmDownload(false);
-      setNotice("This device now matches the synced copy.");
+      await changePassword(currentPassword, nextPassword);
+      setCurrentPassword("");
+      setNextPassword("");
+      setConfirmNext("");
+      setChanging(false);
+      setNotice("Password saved. Use it the next time you sign in.");
     } catch (caught) {
       setError(accountError(caught));
     } finally {
@@ -273,28 +263,53 @@ export function AccountModal({
     return (
       <Modal title="Account" onClose={onClose}>
         <p className="text-sm leading-6 text-fog">
-          Signed in as {sessionEmail}. Upload sends an encrypted copy of this device. Download replaces this device with that copy.
+          Signed in as {sessionEmail}. Changes are encrypted on this device and stored with this account. Signing in on another device opens the same records.
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {confirmUpload ? (
-            <button type="button" className={buttonClass.primary} disabled={busy} onClick={() => void upload()}>
-              {busy ? "Uploading" : "Replace the synced copy"}
+        {changing ? (
+          <form
+            className="mt-4 grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void savePassword();
+            }}
+          >
+            <Field label="Current password">
+              <input className={inputClass} type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+            </Field>
+            <Field label="New password">
+              <input className={inputClass} type="password" autoComplete="new-password" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} />
+            </Field>
+            <Field label="Confirm new password">
+              <input className={inputClass} type="password" autoComplete="new-password" value={confirmNext} onChange={(event) => setConfirmNext(event.target.value)} />
+            </Field>
+            <p className="text-xs leading-5 text-fog">The recovery key does not change. Forgot password still asks for it.</p>
+            <button type="submit" className={buttonClass.primary} disabled={busy}>
+              {busy ? "Saving" : "Save password"}
             </button>
-          ) : (
-            <button type="button" className={buttonClass.primary} onClick={() => setConfirmUpload(true)}>
-              Upload this device
+            <button
+              type="button"
+              className={buttonClass.ghost}
+              onClick={() => {
+                setChanging(false);
+                setError(null);
+              }}
+            >
+              Cancel
             </button>
-          )}
-          {confirmDownload ? (
-            <button type="button" className={buttonClass.danger} disabled={busy} onClick={() => void download()}>
-              {busy ? "Downloading" : "Replace this device"}
-            </button>
-          ) : (
-            <button type="button" className={buttonClass.ghost} onClick={() => setConfirmDownload(true)}>
-              Download to this device
-            </button>
-          )}
-        </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            className={`${buttonClass.ghost} mt-4`}
+            onClick={() => {
+              setChanging(true);
+              setError(null);
+              setNotice(null);
+            }}
+          >
+            Change password
+          </button>
+        )}
         {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
         {notice ? <p className="mt-3 text-sm text-fog">{notice}</p> : null}
         <button type="button" className={`${buttonClass.ghost} mt-4`} onClick={() => void signOutAccount().then(onClose)}>
@@ -329,7 +344,7 @@ export function AccountModal({
         ))}
       </div>
       <p className="mt-4 text-sm leading-6 text-fog">
-        An account is required. TaxTrack encrypts your records on this device. The server stores unreadable text.
+        An account is required. TaxTrack encrypts your records on this device before storing them. Signing in on another device opens the same records.
       </p>
       <form
         className="mt-4 grid gap-3"
