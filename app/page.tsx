@@ -1,5 +1,11 @@
 import { AppShell } from "@/components/AppShell";
+import { InstantBootSplash } from "@/components/InstantBootSplash";
 
 export default function Home() {
-  return <AppShell />;
+  return (
+    <>
+      <InstantBootSplash />
+      <AppShell />
+    </>
+  );
 }

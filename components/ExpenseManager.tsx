@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useSyncExternalStore } from "react";
-import { AlertTriangle, ImagePlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Receipt } from "lucide-react";
 import { assetTreatment, CATEGORY_HINTS, type FinancialYear } from "@/lib/ato-rules";
-import { defaultEntryDate, formatMediumDate, isRealIsoDate, isWithin } from "@/lib/dates";
+import { carClaims, formatKilometres, vehicleName } from "@/lib/car";
+import { defaultEntryDate, isRealIsoDate, isWithin } from "@/lib/dates";
 import { createId } from "@/lib/id";
 import { prepareReceipt, receiptDownloadName, receiptKind, receiptLabel } from "@/lib/receiptImage";
 import { putReceipt, readCachedReceipt, subscribeReceipts } from "@/lib/receiptStore";
-import { formatMoney, portionCents, toCents } from "@/lib/money";
+import { formatCents, formatMoney, portionCents, toCents } from "@/lib/money";
 import {
   CATEGORIES,
   categoryById,
@@ -31,6 +32,8 @@ interface FormState {
   dgrConfirmed: boolean;
   isEquipment: boolean;
   workUsePercent: string;
+  kilometres: string;
+  vehicle: string;
   receiptId: string | null;
   pendingImage: string | null;
   removeReceipt: boolean;
@@ -49,6 +52,8 @@ function blankForm(year: FinancialYear): FormState {
     dgrConfirmed: false,
     isEquipment: false,
     workUsePercent: "100",
+    kilometres: "",
+    vehicle: "",
     receiptId: null,
     pendingImage: null,
     removeReceipt: false,
@@ -68,6 +73,8 @@ function fromExpense(expense: Expense): FormState {
     dgrConfirmed: expense.dgrConfirmed,
     isEquipment: expense.isEquipment,
     workUsePercent: String(expense.workUsePercent),
+    kilometres: expense.kilometres == null ? "" : String(expense.kilometres),
+    vehicle: expense.vehicle ?? "",
     receiptId: expense.receiptId,
     pendingImage: null,
     removeReceipt: false,
@@ -104,9 +111,8 @@ export function ExpenseManager({
     return draftDate ? { ...next, date: draftDate } : next;
   });
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<ExpenseCategory | "all" | "review">("all");
+  const [openId, setOpenId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [workLoads, setWorkLoads] = useState("");
   const [mixedLoads, setMixedLoads] = useState("");
@@ -145,6 +151,8 @@ export function ExpenseManager({
       isEquipment: category === "self-education" || category === "other" ? current.isEquipment : false,
       workUsePercent:
         category === "tools" || category === "self-education" || category === "other" ? current.workUsePercent : "100",
+      kilometres: category === "car" ? current.kilometres : "",
+      vehicle: category === "car" ? current.vehicle : "",
     }));
   }
 
@@ -164,23 +172,50 @@ export function ExpenseManager({
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    const amount = Number(form.amount);
     if (!isRealIsoDate(form.date) || !isWithin(form.date, year.start, year.end)) {
       setError(`Choose a date inside the ${year.label} income year.`);
       return;
     }
-    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
-      setError("Enter an amount greater than zero.");
-      return;
-    }
-    const cents = Math.round(amount * 100);
-    if (Math.abs(amount * 100 - cents) > 0.001) {
-      setError("Use dollars and cents, such as 24.50.");
-      return;
-    }
     const description = form.description.trim();
     if (!description || description.length > 160) {
-      setError("Add a short description.");
+      setError(form.category === "car" ? "Add where you went and why." : "Add a short description.");
+      return;
+    }
+    const carTrip = form.category === "car";
+    let amount = Number(form.amount);
+    let kilometres: number | null = null;
+    if (carTrip) {
+      const entered = Number(form.kilometres);
+      if (!Number.isFinite(entered) || entered <= 0 || entered > 20_000) {
+        setError("Enter the work kilometres for this trip.");
+        return;
+      }
+      const hundredths = Math.round(entered * 100);
+      if (Math.abs(entered * 100 - hundredths) > 0.001) {
+        setError("Use kilometres to two decimal places, such as 18.5.");
+        return;
+      }
+      const tripCents = Math.round((hundredths * year.carCentsPerKm) / 100);
+      if (tripCents <= 0) {
+        setError("That distance is too short to make a claim.");
+        return;
+      }
+      kilometres = hundredths / 100;
+      amount = tripCents / 100;
+    } else {
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
+        setError("Enter an amount greater than zero.");
+        return;
+      }
+      const cents = Math.round(amount * 100);
+      if (Math.abs(amount * 100 - cents) > 0.001) {
+        setError("Use dollars and cents, such as 24.50.");
+        return;
+      }
+      amount = cents / 100;
+    }
+    if (form.vehicle.trim().length > 80) {
+      setError("Keep the vehicle name short.");
       return;
     }
     const percent = Number(form.workUsePercent);
@@ -205,164 +240,145 @@ export function ExpenseManager({
     onSave({
       id: form.id || createId(),
       date: form.date,
-      amount: cents / 100,
+      amount,
       category: form.category,
       description,
-      merchant: form.merchant.trim(),
+      merchant: carTrip ? "" : form.merchant.trim(),
       paymentMethod: form.paymentMethod,
       notes: form.notes.trim(),
       dgrConfirmed: form.category === "donations" ? form.dgrConfirmed : false,
       isEquipment: form.category === "self-education" || form.category === "other" ? form.isEquipment : false,
       workUsePercent: equipment ? percent : 100,
+      kilometres,
+      vehicle: carTrip ? form.vehicle.trim() : "",
       receiptId,
     });
     setForm(blankForm(year));
     setWorkLoads("");
     setMixedLoads("");
     setError(null);
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1800);
+  }
+
+  function load(expense: Expense) {
+    setForm(fromExpense(expense));
+    setOpenId(expense.id);
+    setError(null);
+    setPendingDelete(null);
   }
 
   const visible = expenses
     .filter((expense) => {
-      if (filter === "review") return needsReview(expense);
-      if (filter !== "all") return expense.category === filter;
-      return true;
-    })
-    .filter((expense) => {
-      const haystack = `${expense.description} ${expense.merchant} ${expense.notes} ${categoryById(expense.category).label}`.toLowerCase();
+      const haystack = `${expense.description} ${expense.merchant} ${expense.notes} ${expense.vehicle ?? ""} ${categoryById(expense.category).label}`.toLowerCase();
       return haystack.includes(query.trim().toLowerCase());
     })
     .sort((a, b) => b.date.localeCompare(a.date) || a.description.localeCompare(b.description));
+  const tripClaims = carClaims(expenses, year.carCentsPerKm);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Receipts and expenses</h2>
-        <p className="mt-1 max-w-2xl text-sm leading-6 text-fog">
-          Log card payments and cash expenses. Items over $300 are flagged as depreciating assets instead of immediate write-offs.
-        </p>
-      </div>
-
+    <div className="grid gap-4 lg:grid-cols-2">
       <Panel>
-        <form ref={formRef} className="space-y-4" onSubmit={save} autoComplete="off">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="font-semibold">{form.id ? "Edit expense" : "Add an expense"}</h3>
-            {saved ? <span className="text-sm text-mint">Saved on this device</span> : null}
+        <div className="flex items-start gap-3">
+          <Receipt className="mt-0.5 text-mint" size={18} aria-hidden />
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Receipts and expenses</h2>
+            <p className="mt-1 text-sm leading-6 text-fog">
+              Card payments, cash expenses, and work kilometres for {year.label}. A tool over $300 stays out of this total. Add it under Assets for the yearly decline in value.
+            </p>
           </div>
+        </div>
+        <form ref={formRef} className="mt-4" onSubmit={save} autoComplete="off">
           <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={form.category === "car" ? "Purpose" : "Description"}>
+              <input
+                className={inputClass}
+                required
+                maxLength={160}
+                value={form.description}
+                placeholder={form.category === "car" ? "Client meeting, Brisbane" : "Desk chair"}
+                onChange={(event) => setForm({ ...form, description: event.target.value })}
+              />
+            </Field>
             <Field label="Date">
               <input className={inputClass} type="date" required min={year.start} max={year.end} value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
             </Field>
-            <Field label="Amount" hint="Full cost for equipment. Work-related amount for other expenses.">
-              <input className={inputClass} inputMode="decimal" type="number" min="0.01" step="0.01" required placeholder="0.00" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} />
+            {form.category === "car" ? (
+              <Field label="Kilometres" hint={`The ${year.label} rate is ${formatCents(year.carCentsPerKm)} a kilometre.`}>
+                <input className={inputClass} inputMode="decimal" placeholder="0" value={form.kilometres} onChange={(event) => setForm({ ...form, kilometres: event.target.value })} />
+              </Field>
+            ) : (
+              <Field label="Amount (AUD)" hint="Full cost for equipment. Work-related amount for other expenses.">
+                <input className={inputClass} inputMode="decimal" placeholder="0.00" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} />
+              </Field>
+            )}
+            <Field label="Category" hint={CATEGORY_HINTS[form.category]}>
+              <select className={inputClass} value={form.category} onChange={(event) => updateCategory(event.target.value as ExpenseCategory)}>
+                {CATEGORIES.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.label}
+                  </option>
+                ))}
+              </select>
             </Field>
+            {equipment ? (
+              <Field label="Work use %" hint="The $300 test uses the full cost.">
+                <input className={inputClass} inputMode="numeric" value={form.workUsePercent} onChange={(event) => setForm({ ...form, workUsePercent: event.target.value })} />
+              </Field>
+            ) : null}
+            {form.category === "car" ? (
+              <Field label="Vehicle" hint="The 5,000 km cap is per car. Leave this blank if you use one car.">
+                <input className={inputClass} maxLength={80} placeholder="Car" value={form.vehicle} onChange={(event) => setForm({ ...form, vehicle: event.target.value })} />
+              </Field>
+            ) : (
+              <Field label="Paid by">
+                <select className={inputClass} value={form.paymentMethod} onChange={(event) => setForm({ ...form, paymentMethod: event.target.value as PaymentMethod })}>
+                  {PAYMENT_METHODS.map((method) => (
+                    <option key={method.id} value={method.id}>
+                      {method.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {form.category === "car" ? null : (
+              <Field label="Merchant" hint="Optional.">
+                <input className={inputClass} maxLength={80} value={form.merchant} onChange={(event) => setForm({ ...form, merchant: event.target.value })} />
+              </Field>
+            )}
           </div>
-          <Field label="Category" hint={CATEGORY_HINTS[form.category]}>
-            <select className={inputClass} value={form.category} onChange={(event) => updateCategory(event.target.value as ExpenseCategory)}>
-              {CATEGORIES.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
+          <Field label="Note">
+            <input className={inputClass} maxLength={500} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
           </Field>
 
           {form.category === "laundry" ? (
-            <div className="rounded-2xl border border-line p-3">
-              <p className="text-sm font-medium">Laundry basis</p>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <Field label="Work-only loads">
-                  <input className={inputClass} type="number" min="0" step="1" value={workLoads} onChange={(event) => setWorkLoads(event.target.value)} />
-                </Field>
-                <Field label="Mixed loads">
-                  <input className={inputClass} type="number" min="0" step="1" value={mixedLoads} onChange={(event) => setMixedLoads(event.target.value)} />
-                </Field>
-              </div>
-              <button
-                type="button"
-                className={cx(buttonClass.ghost, "mt-3")}
-                disabled={suggestedLaundry <= 0}
-                onClick={() => setForm({ ...form, amount: suggestedLaundry.toFixed(2) })}
-              >
-                Use {formatMoney(suggestedLaundry)} · $1 a work-only load, 50c mixed
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="Work-only loads">
+                <input className={inputClass} inputMode="numeric" value={workLoads} onChange={(event) => setWorkLoads(event.target.value)} />
+              </Field>
+              <Field label="Mixed loads">
+                <input className={inputClass} inputMode="numeric" value={mixedLoads} onChange={(event) => setMixedLoads(event.target.value)} />
+              </Field>
+              <button type="button" className={buttonClass.ghost} disabled={suggestedLaundry <= 0} onClick={() => setForm({ ...form, amount: suggestedLaundry.toFixed(2) })}>
+                Use {formatMoney(suggestedLaundry)}
               </button>
             </div>
           ) : null}
 
           {form.category === "donations" ? (
-            <div className="space-y-2">
-              {Number.isFinite(amountValue) && amountValue > 0 && amountValue < 2 ? (
-                <p className="flex gap-2 text-sm text-gold">
-                  <AlertTriangle size={16} className="mt-0.5 shrink-0" /> Gifts under $2 are not deductible. This one will stay out of the total.
-                </p>
-              ) : null}
-              <label className="flex items-start gap-3 rounded-2xl border border-gold/40 bg-gold/10 p-3 text-sm">
-                <input type="checkbox" className="mt-1 size-4" checked={form.dgrConfirmed} onChange={(event) => setForm({ ...form, dgrConfirmed: event.target.checked })} />
-                <span>
-                  <span className="block font-medium text-gold">I have checked this organisation is a DGR</span>
-                  <span className="mt-1 block text-fog">TaxTrack holds the gift out of the myTax total until you confirm.</span>
-                </span>
-              </label>
-            </div>
-          ) : null}
-
-          {form.category === "self-education" || form.category === "other" ? (
-            <label className="flex items-start gap-3 rounded-2xl border border-line p-3 text-sm">
-              <input type="checkbox" className="mt-1 size-4 accent-[var(--mint)]" checked={form.isEquipment} onChange={(event) => setForm({ ...form, isEquipment: event.target.checked })} />
-              <span>
-                <span className="block font-medium">This is equipment</span>
-                <span className="mt-1 block text-fog">Turn this on for a laptop, desk, or other asset so the $300 test can flag it.</span>
-              </span>
+            <label className="mt-3 flex items-start gap-3 text-sm">
+              <input type="checkbox" className="mt-1 size-4 accent-[var(--mint)]" checked={form.dgrConfirmed} onChange={(event) => setForm({ ...form, dgrConfirmed: event.target.checked })} />
+              <span>This organisation is a deductible gift recipient. Until you confirm, the gift stays out of the total.</span>
             </label>
           ) : null}
 
-          {equipment ? (
-            <Field label="Work use %" hint="The $300 test uses the full cost. An immediate write-off uses this percentage. Decline in value is not calculated.">
-              <input className={inputClass} type="number" min={1} max={100} step={1} value={form.workUsePercent} onChange={(event) => setForm({ ...form, workUsePercent: event.target.value })} />
-            </Field>
+          {form.category === "self-education" || form.category === "other" ? (
+            <label className="mt-3 flex items-start gap-3 text-sm">
+              <input type="checkbox" className="mt-1 size-4 accent-[var(--mint)]" checked={form.isEquipment} onChange={(event) => setForm({ ...form, isEquipment: event.target.checked })} />
+              <span>This is equipment, so the $300 test applies.</span>
+            </label>
           ) : null}
 
-          {preview === "immediate" && Number.isFinite(workUse) ? (
-            <p className="rounded-2xl border border-mint/30 bg-mint/10 px-3 py-2 text-sm text-mint">
-              $300 or under. Immediate write-off of {formatMoney(portionCents(amountValue, workUse) / 100)}.
-            </p>
-          ) : null}
-          {preview === "depreciating" ? (
-            <p className="flex gap-2 rounded-2xl border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-gold">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              Over $300. This is a depreciating asset, so the full price stays out of the immediate deduction.
-            </p>
-          ) : null}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Description">
-              <input className={inputClass} required maxLength={160} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
-            </Field>
-            <Field label="Merchant" hint="Optional.">
-              <input className={inputClass} maxLength={80} value={form.merchant} onChange={(event) => setForm({ ...form, merchant: event.target.value })} />
-            </Field>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-[12rem_1fr]">
-            <Field label="Paid by">
-              <select className={inputClass} value={form.paymentMethod} onChange={(event) => setForm({ ...form, paymentMethod: event.target.value as PaymentMethod })}>
-                {PAYMENT_METHODS.map((method) => (
-                  <option key={method.id} value={method.id}>
-                    {method.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Note">
-              <input className={inputClass} maxLength={500} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} />
-            </Field>
-          </div>
           <div
-            className={cx(
-              "rounded-lg border bg-ink p-3 transition",
-              dragOver ? "border-dashed border-mint bg-mint/5" : "border-line",
-            )}
+            className={cx("mt-4 rounded-xl border p-3", dragOver ? "border-dashed border-mint" : "border-line")}
             onDragEnter={(event) => {
               event.preventDefault();
               dragDepth.current += 1;
@@ -389,10 +405,8 @@ export function ExpenseManager({
             }}
           >
             <p className="text-sm font-medium">Receipt or invoice</p>
-            <p className="mt-1 text-xs leading-5 text-fog">
-              Photos, PDFs, and Word documents stay in this browser. On a computer, drop the file in this box. Photos are shrunk to a readable JPEG. PDF and Word files are kept as they are, and the copy travels with a backup file.
-            </p>
-            {dragOver ? <p className="mt-2 text-sm font-medium text-mint">Drop the file to attach it</p> : null}
+            <p className="mt-1 text-xs leading-5 text-fog">Drop a photo, PDF, or Word file. It is encrypted with your records before upload, and it travels with a backup.</p>
+            {dragOver ? <p className="mt-2 text-sm text-mint">Drop the file to attach it</p> : null}
             {receiptPreview ? (
               <button type="button" className="mt-3 block text-left" onClick={() => setViewing(receiptPreview)}>
                 <ReceiptBody src={receiptPreview} compact />
@@ -414,90 +428,94 @@ export function ExpenseManager({
                 />
               </label>
               {receiptPreview ? (
-                <button
-                  type="button"
-                  className={buttonClass.ghost}
-                  onClick={() => setForm((current) => ({ ...current, pendingImage: null, removeReceipt: true }))}
-                >
+                <button type="button" className={buttonClass.ghost} onClick={() => setForm((current) => ({ ...current, pendingImage: null, removeReceipt: true }))}>
                   Remove file
                 </button>
               ) : null}
             </div>
           </div>
-          {error ? <p className="text-sm text-rose">{error}</p> : null}
-          <div className="flex flex-wrap gap-2">
+
+          {form.category === "car" && Number.isFinite(Number(form.kilometres)) && Number(form.kilometres) > 0 ? (
+            <p className="mt-3 text-sm text-fog">{carPreview(form.kilometres, form.vehicle, expenses, form.id, year.carCentsPerKm)}</p>
+          ) : null}
+          {preview === "immediate" && Number.isFinite(workUse) ? (
+            <p className="mt-3 text-sm text-fog">$300 or under · immediate write-off of {formatMoney(portionCents(amountValue, workUse) / 100)}</p>
+          ) : null}
+          {preview === "depreciating" ? (
+            <p className="mt-3 text-sm text-fog">Over $300 · the full price stays out of this total. Add it under Assets for the yearly claim.</p>
+          ) : null}
+          {form.category === "donations" && Number.isFinite(amountValue) && amountValue > 0 && amountValue < 2 ? (
+            <p className="mt-3 text-sm text-fog">Under $2 · this gift stays out of the total.</p>
+          ) : null}
+          {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
+          <div className="mt-4 flex flex-wrap gap-2">
             <button className={buttonClass.primary} type="submit" disabled={compressing}>
-              <Plus size={16} /> {form.id ? "Update expense" : "Save expense"}
+              {form.id ? "Save expense" : "Add expense"}
             </button>
             {form.id ? (
               <button className={buttonClass.ghost} type="button" onClick={() => setForm(blankForm(year))}>
-                Cancel edit
+                Cancel
               </button>
             ) : null}
           </div>
         </form>
       </Panel>
 
-      <Panel>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="font-semibold">
-            {expenses.length} logged · {formatMoney(expenses.reduce((sum, expense) => sum + toCents(expense.amount), 0) / 100)}
-          </h3>
-          <input className={cx(inputClass, "sm:max-w-xs")} placeholder="Search receipts" value={query} onChange={(event) => setQuery(event.target.value)} />
-        </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-          <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label="All" />
-          <FilterChip active={filter === "review"} onClick={() => setFilter("review")} label="Review" />
-          {CATEGORIES.map((category) => (
-            <FilterChip key={category.id} active={filter === category.id} onClick={() => setFilter(category.id)} label={category.label} />
-          ))}
-        </div>
+      <div className="space-y-3">
+        {expenses.length > 0 ? (
+          <input className={inputClass} placeholder="Search" value={query} onChange={(event) => setQuery(event.target.value)} />
+        ) : null}
         {visible.length === 0 ? (
-          <p className="mt-6 text-sm text-fog">Nothing in this view yet. Add a receipt above, or clear the filter.</p>
+          <Panel>
+            <p className="text-sm text-fog">
+              {expenses.length === 0 ? "No expenses yet." : "Nothing matches that search."}
+            </p>
+          </Panel>
         ) : (
-          <ul className="mt-4 space-y-2">
-            {visible.map((expense) => {
-              const treatment = assetTreatment(expense);
-              return (
-                <li key={expense.id} className="rounded-lg border border-line bg-ink p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{expense.description}</p>
-                      <p className="mt-1 text-xs text-fog">
-                        {formatMediumDate(expense.date)} · {categoryById(expense.category).label}
-                        {expense.merchant ? ` · ${expense.merchant}` : ""} · {PAYMENT_METHODS.find((method) => method.id === expense.paymentMethod)?.label}
-                      </p>
-                    </div>
-                    <p className="font-mono text-sm">{formatMoney(expense.amount)}</p>
-                  </div>
-                  {expense.receiptId ? <ReceiptThumb id={expense.receiptId} onOpen={setViewing} /> : null}
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {treatment === "immediate" ? <Badge tone="mint">Immediate write-off{expense.workUsePercent === 100 ? "" : ` · ${expense.workUsePercent}%`}</Badge> : null}
-                    {treatment === "depreciating" ? <Badge tone="gold">Depreciating asset</Badge> : null}
-                    {expense.category === "donations" && !expense.dgrConfirmed && toCents(expense.amount) >= 200 ? <Badge tone="gold">Held — confirm DGR</Badge> : null}
-                    {expense.category === "donations" && toCents(expense.amount) < 200 ? <Badge tone="gold">Under $2 — not deductible</Badge> : null}
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    <button type="button" className={cx(buttonClass.ghost, "min-h-10 px-3")} onClick={() => setForm(fromExpense(expense))}>
-                      <Pencil size={14} /> Edit
-                    </button>
+          visible.map((expense) => {
+            const open = openId === expense.id;
+            const detail = expense.notes || expense.receiptId;
+            const claimCents = tripClaims.get(expense.id) ?? 0;
+            return (
+              <Panel key={expense.id}>
+                <div className="flex items-start justify-between gap-3 px-4 py-3">
+                  <button type="button" className="min-w-0 text-left" onClick={() => load(expense)}>
+                    <p className="text-sm font-semibold">{expense.description}</p>
+                    <p className="mt-1 text-xs text-fog">
+                      {expense.category === "car"
+                        ? `${expense.date.split("-").reverse().join("/")} · ${formatKilometres(expense.kilometres ?? 0)} km · ${vehicleName(expense.vehicle)} · ${expenseStatus(expense, claimCents)}`
+                        : `${expense.date.split("-").reverse().join("/")} · ${formatCents(toCents(expense.amount))} · ${categoryById(expense.category).label}${expense.merchant ? ` · ${expense.merchant}` : ""} · ${expenseStatus(expense, claimCents)}`}
+                    </p>
+                  </button>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    {detail ? (
+                      <button type="button" className="text-xs font-semibold text-mint" onClick={() => setOpenId(open ? null : expense.id)}>
+                        {open ? "Hide" : "Show"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
-                      className={cx(buttonClass.danger, "min-h-10 px-3")}
+                      className="text-xs font-semibold text-rose"
                       onClick={() => {
                         if (pendingDelete === expense.id) onDelete(expense.id);
                         else setPendingDelete(expense.id);
                       }}
                     >
-                      <Trash2 size={14} /> {pendingDelete === expense.id ? "Confirm delete" : "Delete"}
+                      {pendingDelete === expense.id ? "Confirm" : "Delete"}
                     </button>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
+                </div>
+                {open && detail ? (
+                  <div className="border-t border-line px-4 py-3">
+                    {expense.notes ? <p className="text-sm text-fog">{expense.notes}</p> : null}
+                    {expense.receiptId ? <ReceiptThumb id={expense.receiptId} onOpen={setViewing} /> : null}
+                  </div>
+                ) : null}
+              </Panel>
+            );
+          })
         )}
-      </Panel>
+      </div>
       {viewing ? (
         <Modal title="Receipt" onClose={() => setViewing(null)} wide>
           <ReceiptBody src={viewing} />
@@ -536,31 +554,25 @@ function ReceiptBody({ src, compact = false }: { src: string; compact?: boolean 
   );
 }
 
-function needsReview(expense: Expense): boolean {
-  if (assetTreatment(expense) === "depreciating") return true;
-  if (expense.category !== "donations") return false;
-  return !expense.dgrConfirmed || toCents(expense.amount) < 200;
+function carPreview(kilometres: string, vehicle: string, expenses: Expense[], editingId: string, centsPerKm: number): string {
+  const entered = Number(kilometres);
+  const hundredths = Math.round(entered * 100);
+  const tripCents = Math.round((hundredths * centsPerKm) / 100);
+  const name = vehicleName(vehicle);
+  const logged = expenses
+    .filter((expense) => expense.category === "car" && expense.id !== editingId && vehicleName(expense.vehicle) === name)
+    .reduce((sum, expense) => sum + Math.round((expense.kilometres ?? 0) * 100), 0);
+  const total = (logged + hundredths) / 100;
+  const cap = total > 5000 ? " Only the first 5,000 km for this car count." : "";
+  return `${formatKilometres(hundredths / 100)} km × ${formatCents(centsPerKm)} = ${formatCents(tripCents)}.${cap}`;
 }
 
-function FilterChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cx(
-        "focus-ring shrink-0 rounded-full border px-3 py-1.5 text-xs",
-        active ? "border-mint bg-mint text-ink" : "border-line text-fog",
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
-function Badge({ children, tone }: { children: ReactNode; tone: "mint" | "gold" }) {
-  return (
-    <span className={cx("rounded-full px-2 py-1 text-[11px] font-medium", tone === "mint" ? "bg-mint/15 text-mint" : "bg-gold/15 text-gold")}>
-      {children}
-    </span>
-  );
+function expenseStatus(expense: Expense, claimCents: number): string {
+  if (expense.category === "car") return claimCents <= 0 ? "Over 5,000 km" : formatCents(claimCents);
+  const treatment = assetTreatment(expense);
+  if (treatment === "depreciating") return "Not in the total";
+  if (treatment === "immediate") return expense.workUsePercent === 100 ? "Immediate" : `Immediate · ${expense.workUsePercent}%`;
+  if (expense.category === "donations" && toCents(expense.amount) < 200) return "Not deductible";
+  if (expense.category === "donations" && !expense.dgrConfirmed) return "Confirm DGR";
+  return PAYMENT_METHODS.find((method) => method.id === expense.paymentMethod)?.label ?? "";
 }

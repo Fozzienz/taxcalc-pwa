@@ -12,7 +12,9 @@ import {
 } from "@/lib/backup";
 import { installReceiptImages } from "@/lib/receiptStore";
 import { formatTimestamp, isValidHours } from "@/lib/dates";
+import { yearById } from "@/lib/ato-rules";
 import type { AppState } from "@/lib/types";
+import { ReportActions } from "@/components/ReportActions";
 import { buttonClass, cx, Field, inputClass, Modal } from "@/components/ui";
 
 export function BackupModal({
@@ -135,6 +137,26 @@ export function BackupModal({
         <button type="button" className={cx(buttonClass.primary, "mt-3 w-full")} onClick={exportData}>
           <Download size={16} /> Export data
         </button>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-line p-3">
+        <p className="text-sm font-medium">Accountant report for {yearById(state.activeYear).label}</p>
+        <p className="mt-1 text-xs leading-5 text-fog">
+          Working-from-home hours, every expense, and the totals. Excel downloads a workbook. The PDF is the printout, with the TaxTrack name and logo.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <ReportActions
+            year={yearById(state.activeYear)}
+            logs={Object.values(state.years[state.activeYear].dayLogs)}
+            expenses={state.years[state.activeYear].expenses}
+            rentals={{
+              enabled: state.settings.rentalProperties === true,
+              properties: state.properties ?? [],
+              expenses: state.years[state.activeYear].rentalExpenses ?? [],
+            }}
+            assets={state.assets ?? []}
+          />
+        </div>
       </div>
 
       <div className="mt-4 rounded-2xl border border-line p-3">

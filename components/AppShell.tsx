@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarDays, DatabaseBackup, LayoutDashboard, Receipt, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, LayoutDashboard, Receipt, ShieldCheck, Building2, Laptop } from "lucide-react";
 import { DISCLAIMER } from "@/lib/ato-rules";
 import { visibleFinancialYears } from "@/lib/dates";
 import { buildSummary } from "@/lib/summary";
 import { useDisplay } from "@/hooks/useDisplay";
 import { useTaxStore } from "@/hooks/useTaxStore";
 import type { YearId } from "@/lib/types";
+import { AccountModal } from "@/components/AccountModal";
+import { AuthScreen } from "@/components/AuthScreen";
+import { AssetManager } from "@/components/AssetManager";
 import { BackupModal } from "@/components/BackupModal";
+import { BootSplash, useBootSplash } from "@/components/BootSplash";
 import { BrandLogo } from "@/components/BrandLogo";
 import { CalendarView } from "@/components/CalendarView";
 import { Dashboard } from "@/components/Dashboard";
@@ -16,15 +20,20 @@ import { DayLogModal } from "@/components/DayLogModal";
 import { DisplayApplier } from "@/components/DisplayApplier";
 import { ExpenseManager } from "@/components/ExpenseManager";
 import { MenuButton, MenuDrawer } from "@/components/MenuDrawer";
+import { RentalManager } from "@/components/RentalManager";
 import { cx } from "@/components/ui";
+import { supabase, supabaseConfigured } from "@/lib/supabase/client";
+import { signOutAccount } from "@/lib/account";
+import { getVaultKey, markPasswordRecovery, passwordRecoveryPending, recoveryHoldActive, setVaultKey, subscribeVault } from "@/lib/vaultSession";
 
-type Tab = "dashboard" | "calendar" | "expenses";
-type Overlay = { type: "none" } | { type: "backup" } | { type: "menu" } | { type: "day"; date: string };
+type Tab = "dashboard" | "calendar" | "expenses" | "assets" | "rentals";
+type Overlay = { type: "none" } | { type: "backup" } | { type: "menu" } | { type: "account" } | { type: "day"; date: string };
 
 const TABS = [
   { id: "dashboard", label: "Summary", icon: LayoutDashboard },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
   { id: "expenses", label: "Expenses", icon: Receipt },
+  { id: "assets", label: "Assets", icon: Laptop },
 ] as const;
 
 export function AppShell() {
@@ -35,17 +44,67 @@ export function AppShell() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftDate, setDraftDate] = useState<string | null>(null);
   const [formToken, setFormToken] = useState(0);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [held, setHeld] = useState(false);
 
   const summary = useMemo(() => {
     if (!store.ready) return null;
-    return buildSummary(store.year, store.yearData);
+    return buildSummary(store.year, store.yearData, {
+      rentals: store.state.settings.rentalProperties === true,
+      properties: store.state.properties ?? [],
+      assets: store.state.assets ?? [],
+    });
   }, [store]);
+  const rentalsOn = store.ready && store.state.settings.rentalProperties === true;
+  useEffect(() => {
+    if (!rentalsOn && tab === "rentals") setTab("dashboard");
+  }, [rentalsOn, tab]);
+  const tabs = rentalsOn ? [...TABS, { id: "rentals" as const, label: "Rentals", icon: Building2 }] : TABS;
 
-  if (!store.ready || !summary) {
+  useEffect(() => {
+    const sync = () => {
+      setUnlocked(getVaultKey() !== null);
+      setHeld(recoveryHoldActive() || passwordRecoveryPending());
+    };
+    sync();
+    return subscribeVault(sync);
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthReady(true);
+      return;
+    }
+    void supabase.auth.getSession().then(({ data }) => {
+      setSessionEmail(data.session?.user.email ?? null);
+      setAuthReady(true);
+    });
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      setSessionEmail(session?.user.email ?? null);
+      if (event === "SIGNED_OUT") setVaultKey(null);
+      if (event === "PASSWORD_RECOVERY") markPasswordRecovery();
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  const splash = useBootSplash(store.ready && summary !== null);
+  const entered = supabaseConfigured && authReady && Boolean(sessionEmail) && unlocked && !held;
+  if (!store.ready || !authReady || splash !== "gone" || !summary) {
     return (
       <>
         <DisplayApplier theme={display.theme} textScale={display.textScale} />
-        <Loading />
+        <BootSplash leaving={splash === "leave"} />
+      </>
+    );
+  }
+
+  if (!entered) {
+    return (
+      <>
+        <DisplayApplier theme={display.theme} textScale={display.textScale} />
+        <AuthScreen />
       </>
     );
   }
@@ -91,7 +150,7 @@ export function AppShell() {
         </div>
         <div className="mx-auto hidden w-full max-w-6xl items-center justify-between gap-3 px-6 pb-3 sm:flex">
           <nav className="flex gap-1 rounded-lg border border-line bg-panel p-1" aria-label="Sections">
-            {TABS.map((item) => (
+            {tabs.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -107,7 +166,7 @@ export function AppShell() {
             ))}
           </nav>
           <p className="flex items-center gap-1.5 text-xs text-fog">
-            <ShieldCheck size={14} /> Independent of the ATO · on this device only
+            <ShieldCheck size={14} /> Independent of the ATO
           </p>
         </div>
       </header>
@@ -130,6 +189,12 @@ export function AppShell() {
             summary={summary}
             logs={Object.values(logs)}
             expenses={expenses}
+            rentals={{
+              enabled: rentalsOn,
+              properties: store.state.properties ?? [],
+              expenses: store.yearData.rentalExpenses ?? [],
+            }}
+            assets={store.state.assets ?? []}
             onOpenDay={(date) => setOverlay({ type: "day", date })}
             onEditExpense={(id) => {
               setDraftDate(null);
@@ -154,13 +219,29 @@ export function AppShell() {
             onDelete={(id) => store.deleteExpense(store.year.id, id)}
           />
         ) : null}
+        {tab === "assets" ? (
+          <AssetManager year={store.year} assets={store.state.assets ?? []} onSave={store.saveAsset} onDelete={store.deleteAsset} />
+        ) : null}
+        {tab === "rentals" && rentalsOn ? (
+          <RentalManager
+            key={store.year.id}
+            year={store.year}
+            properties={store.state.properties ?? []}
+            expenses={store.yearData.rentalExpenses ?? []}
+            onAddProperty={store.addProperty}
+            onRenameProperty={store.renameProperty}
+            onRemoveProperty={store.removeProperty}
+            onSave={(expense) => store.saveRentalExpense(store.year.id, expense)}
+            onDelete={(id) => store.deleteRentalExpense(store.year.id, id)}
+          />
+        ) : null}
       </main>
 
       <footer className="mx-auto mt-8 w-full max-w-6xl px-4 pb-28 text-xs leading-5 text-fog sm:px-6 lg:pb-10">{DISCLAIMER}</footer>
 
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur sm:hidden" aria-label="Sections">
-        <div className="grid grid-cols-4">
-          {TABS.map((item) => {
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+          {tabs.map((item) => {
             const Icon = item.icon;
             return (
               <button
@@ -174,10 +255,6 @@ export function AppShell() {
               </button>
             );
           })}
-          <button type="button" className="flex min-h-14 flex-col items-center justify-center gap-1 text-[11px] text-fog" onClick={() => setOverlay({ type: "backup" })}>
-            <DatabaseBackup size={18} />
-            Backup
-          </button>
         </div>
       </nav>
 
@@ -189,7 +266,17 @@ export function AppShell() {
           onTextScale={display.setTextScale}
           onClose={() => setOverlay({ type: "none" })}
           onBackup={() => setOverlay({ type: "backup" })}
+          onAccount={() => setOverlay({ type: "account" })}
+          onLogOff={() => {
+            void signOutAccount();
+            setOverlay({ type: "none" });
+          }}
+          rentalsEnabled={rentalsOn}
+          onRentals={store.setRentalProperties}
         />
+      ) : null}
+      {overlay.type === "account" ? (
+        <AccountModal state={store.state} onClose={() => setOverlay({ type: "none" })} onReplace={(file) => store.replaceAll(file)} />
       ) : null}
       {overlay.type === "backup" ? (
         <BackupModal
@@ -235,11 +322,3 @@ export function AppShell() {
   );
 }
 
-function Loading() {
-  return (
-    <div className="mx-auto min-h-full max-w-6xl px-4 py-8">
-      <div className="h-12 w-56 animate-pulse rounded-2xl bg-paper/5" />
-      <div className="mt-6 h-72 animate-pulse rounded-2xl bg-paper/5" />
-    </div>
-  );
-}

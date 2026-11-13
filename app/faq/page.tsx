@@ -9,7 +9,15 @@ const TOPICS: { title: string; body: string }[] = [
   },
   {
     title: "Where your records live",
-    body: "Income years, working-from-home hours, expenses, and attached files stay in this browser. TaxTrack has no account and does not send your records to a server. Use Data and backup in the menu to export a JSON file before you clear the browser, and import that file on another device. A backup is the only copy if this browser is wiped.",
+    body: "Sign in before the summary. TaxTrack encrypts the income years, hours, expenses, assets, rentals, and receipt files on this device, then stores only unreadable text. That is the zero-knowledge model: the server cannot read the records or the recovery key. Log off in the menu returns to the sign-in page. The records remain saved.",
+  },
+  {
+    title: "Recovery key",
+    body: "The recovery key is shown once, on the first sign-in. TaxTrack does not keep a readable copy. Save it somewhere you can still open. A password reset asks for that key. Without it, the new password cannot open the records.",
+  },
+  {
+    title: "Another device",
+    body: "Menu, Account, then Upload this device sends the encrypted copy. On the other device, sign in and choose Download to this device. Download replaces what is on that device. Upload replaces the synced copy. Data and backup still exports a JSON file you can keep yourself.",
   },
   {
     title: "Working from home",
@@ -17,15 +25,23 @@ const TOPICS: { title: string; body: string }[] = [
   },
   {
     title: "Receipts and invoices",
-    body: "On Receipts, attach a photo, a PDF, or a Word document (.doc or .docx). On a computer you can drop the file onto the receipt box. Photos are reduced to a readable JPEG. PDF and Word files are kept as the original file. The same file is included when you export a backup. Open a saved invoice from the expense to view a photo or PDF, or to download a Word document.",
+    body: "On Expenses, attach a photo, a PDF, or a Word document (.doc or .docx). On a computer you can drop the file onto the receipt box. Photos are reduced to a readable JPEG. PDF and Word files are kept as the original file. The file is encrypted with your records before upload, and it is included in a JSON backup. Open a saved invoice from the expense to view a photo or PDF, or to download a Word document.",
+  },
+  {
+    title: "Car kilometres",
+    body: "On Expenses, choose Car (cents per km). Enter the work kilometres and TaxTrack multiplies them by the ATO rate for that income year: 88 cents in 2025–26 and 91 cents in 2026–27. The claim stops at 5,000 km for each car. The rate already covers fuel, registration, insurance, servicing, and decline in value. Keep a note of how you worked out the kilometres. Trips between home and your regular workplace are not included.",
   },
   {
     title: "What the totals leave out",
-    body: "Equipment and tools over $300 are marked as depreciating assets and are not included in the immediate deduction total. TaxTrack does not calculate decline in value. Donations under $2 are not deductible, and a donation of $2 or more stays out of the total until you confirm it was to a deductible gift recipient. Laundry uses $1 a work-only load and 50 cents a mixed load. If that claim is more than $150, keep written evidence. Occupation-specific clothing and protective items are not the laundry shortcut.",
+    body: "Equipment and tools over $300 are marked as depreciating assets and are not included in the immediate deduction total. Add them under Assets. TaxTrack works out prime cost or diminishing value for each income year, using the days you held the item divided by 365, and drops the cents. An item of $300 or less, used mainly for work, is an immediate deduction in the year you first used it. Donations under $2 are not deductible, and a donation of $2 or more stays out of the total until you confirm it was to a deductible gift recipient. Laundry uses $1 a work-only load and 50 cents a mixed load. If that claim is more than $150, keep written evidence. Occupation-specific clothing and protective items are not the laundry shortcut.",
   },
   {
     title: "Copying figures into myTax",
-    body: "The Summary tab is the list to transcribe. Working-from-home hours and the whole-dollar amount sit with the other categories. Copy summary puts that text on the clipboard. Type the figures into ATO myTax yourself. TaxTrack does not lodge a return.",
+    body: "The Summary tab is the list to transcribe. Working-from-home hours and the whole-dollar amount sit with the other categories. If rental properties are enabled, their expenses are a separate total. Copy summary puts that text on the clipboard. Excel report and PDF report, on the summary and under Data and backup, download the hours, expenses, and totals for the selected income year. Type the figures into ATO myTax yourself. TaxTrack does not lodge a return.",
+  },
+  {
+    title: "Rental properties",
+    body: "Turn on Enable Rental Properties in the menu. For each address, log the rent you were paid and the expenses you paid: advertising, body corporate, borrowing costs, cleaning, council rates, gardening, insurance, loan interest, land tax, legal costs, pest control, agent fees, repairs, phone and postage, and water. Rent is income. The expense total is separate, and the cents are dropped. The summary and the Excel and PDF reports include them while the switch is on. Turn it off and the section hides. The records stay saved and travel in the encrypted copy. TaxTrack does not split private use, work out decline in value, or decide if a cost is a repair or a capital improvement.",
   },
 ];
 

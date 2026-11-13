@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { ViewportLock } from "@/components/ViewportLock";
 import "./globals.css";
 
 const inter = Inter({
@@ -11,7 +12,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "TaxTrack — Australian Tax & EOFY Calculator",
   description:
-    "A private Australian end-of-financial-year organiser for working-from-home hours, receipts, and deduction totals before you lodge in ATO myTax. Records stay in your browser.",
+    "A private Australian end-of-financial-year organiser for working-from-home hours, receipts, and deduction totals before you lodge in ATO myTax. Records are encrypted on this device before they are stored.",
   applicationName: "TaxTrack",
   appleWebApp: {
     capable: true,
@@ -28,6 +29,8 @@ export const viewport: Viewport = {
   themeColor: "#070c18",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -40,7 +43,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           }}
         />
       </head>
-      <body className={`${inter.className} min-h-full bg-ink font-sans text-paper antialiased`}>{children}</body>
+      <body className={`${inter.className} min-h-full bg-ink font-sans text-paper antialiased`}>
+        <ViewportLock />
+        {children}
+      </body>
     </html>
   );
 }

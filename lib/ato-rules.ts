@@ -35,6 +35,8 @@ export interface FinancialYear {
   start: string;
   end: string;
   wfhCentsPerHour: number;
+  /** ATO cents per kilometre for a car you own or lease. */
+  carCentsPerKm: number;
   rateNote: string;
 }
 
@@ -45,8 +47,9 @@ export const FINANCIAL_YEARS: readonly FinancialYear[] = [
     start: "2025-07-01",
     end: "2026-06-30",
     wfhCentsPerHour: WFH_CENTS_PER_HOUR,
+    carCentsPerKm: 88,
     rateNote:
-      "The ATO fixed rate for the 2025–26 income year is 70 cents for each hour you actually worked from home.",
+      "The ATO fixed rate for the 2025–26 income year is 70 cents for each hour you actually worked from home. Car expenses use 88 cents a kilometre.",
   },
   {
     id: "2026-27",
@@ -54,8 +57,9 @@ export const FINANCIAL_YEARS: readonly FinancialYear[] = [
     start: "2026-07-01",
     end: "2027-06-30",
     wfhCentsPerHour: WFH_CENTS_PER_HOUR,
+    carCentsPerKm: 91,
     rateNote:
-      "TaxTrack uses 70 cents an hour, the fixed rate published from 1 July 2024 and confirmed for 2024–25 and 2025–26. Confirm the 2026–27 rate before you lodge.",
+      "TaxTrack uses 70 cents an hour, the fixed rate published from 1 July 2024 and confirmed for 2024–25 and 2025–26. Confirm the 2026–27 hourly rate before you lodge. Car expenses use 91 cents a kilometre.",
   },
   {
     id: "2027-28",
@@ -63,8 +67,9 @@ export const FINANCIAL_YEARS: readonly FinancialYear[] = [
     start: "2027-07-01",
     end: "2028-06-30",
     wfhCentsPerHour: WFH_CENTS_PER_HOUR,
+    carCentsPerKm: 91,
     rateNote:
-      "TaxTrack uses 70 cents an hour until the ATO publishes the 2027–28 fixed rate. Confirm the rate before you lodge.",
+      "TaxTrack uses 70 cents an hour, and 91 cents a kilometre, until the ATO publishes the 2027–28 rates. Confirm both before you lodge.",
   },
 ] as const;
 
@@ -91,6 +96,8 @@ export const CATEGORY_HINTS: Record<ExpenseCategory, string> = {
     "The $300 test uses the full cost. At $300 or under, the work-related portion can be an immediate write-off. Over $300, claim decline in value rather than the full price. A set costing more than $300 works the same way.",
   subscriptions:
     "Work-related software, union, or professional subscriptions. Enter your work-related share. Leave out phone, internet, and stationery if you use the 70 cent rate.",
+  car:
+    "Work kilometres in a car you own or lease. TaxTrack multiplies them by the ATO rate for this income year, up to 5,000 km for each car. The rate already covers fuel, registration, insurance, servicing, and decline in value.",
   "tax-affairs":
     "Tax agent fees are claimed in the year you pay them. That can be the year after the return they relate to.",
   other:
