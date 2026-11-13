@@ -1,0 +1,17 @@
+---
+description: When TaxTrack adds a feature StaxQ already has, match StaxQ's UI and behaviour
+alwaysApply: true
+---
+
+# Match StaxQ when the feature already exists
+
+StaxQ lives at `C:\Users\Adam White\staxq-pwa`. Adam likes that UI and the way those screens work. TaxTrack stays its own product: Australian tax records, on this device, no bullion, ticker, or accounts.
+
+Before building a TaxTrack feature that StaxQ already has (changelog, menu, splash, reports, settings, empty states), open the StaxQ screen and follow it.
+
+- Match layout, labels, hierarchy, and the interaction. Short plain-language bullets, the same section pattern, the same back link and page shape.
+- Use TaxTrack colours, type, and copy. Do not paste StaxQ class names or product words.
+- Leave out StaxQ-only systems, such as Supabase changelog notifications, auth, and billing.
+- If StaxQ has no counterpart, design it in the same visual language as the rest of TaxTrack.
+
+Example: the changelog is Keep a Changelog, undated bullets under Added or Fixed, the date on the version heading, and Coming next for Unreleased. It is not a dated grid of long paragraphs.

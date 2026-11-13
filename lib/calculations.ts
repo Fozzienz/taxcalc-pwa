@@ -1,4 +1,5 @@
 import { assetTreatment, DONATION_MINIMUM_CENTS, LAUNDRY_WRITTEN_EVIDENCE_CENTS, WORK_RELATED_EVIDENCE_CENTS } from "@/lib/ato-rules";
+import { summariseCar } from "@/lib/car";
 import { deductionCents, portionCents, toCents, wholeDollarsFromCents } from "@/lib/money";
 import type { DayLog, Expense, ExpenseCategory } from "@/lib/types";
 
@@ -20,6 +21,9 @@ export interface ClaimFigures {
   tools: MoneyTotal;
   subscriptions: MoneyTotal;
   other: MoneyTotal;
+  car: MoneyTotal;
+  carKilometres: number;
+  carClaimKilometres: number;
   taxAffairs: MoneyTotal;
   receiptsCents: number;
   receiptCount: number;
@@ -34,7 +38,8 @@ function emptyTotal(): MoneyTotal {
   return { cents: 0, wholeDollars: 0, count: 0 };
 }
 
-function claimCents(expense: Expense): number {
+export function expenseClaimCents(expense: Expense, carClaim?: ReadonlyMap<string, number>): number {
+  if (expense.category === "car") return carClaim?.get(expense.id) ?? 0;
   const treatment = assetTreatment(expense);
   if (treatment === "depreciating") return 0;
   if (expense.category === "donations") {
@@ -47,6 +52,7 @@ function claimCents(expense: Expense): number {
 
 export function calculateClaims(input: {
   centsPerHour: number;
+  carCentsPerKm: number;
   dayLogs: readonly DayLog[];
   expenses: readonly Expense[];
 }): ClaimFigures {
@@ -62,6 +68,7 @@ export function calculateClaims(input: {
     "self-education": emptyTotal(),
     tools: emptyTotal(),
     subscriptions: emptyTotal(),
+    car: emptyTotal(),
     "tax-affairs": emptyTotal(),
     other: emptyTotal(),
   };
@@ -69,6 +76,7 @@ export function calculateClaims(input: {
   const depreciating: Expense[] = [];
   const heldDonations: Expense[] = [];
   const smallDonations: Expense[] = [];
+  const car = summariseCar(input.expenses, input.carCentsPerKm);
 
   for (const expense of input.expenses) {
     if (assetTreatment(expense) === "depreciating") depreciating.push(expense);
@@ -76,12 +84,16 @@ export function calculateClaims(input: {
       if (toCents(expense.amount) < DONATION_MINIMUM_CENTS) smallDonations.push(expense);
       else if (!expense.dgrConfirmed) heldDonations.push(expense);
     }
-    const cents = claimCents(expense);
+    if (expense.category === "car") continue;
+    const cents = expenseClaimCents(expense);
     if (cents <= 0) continue;
     const bucket = groups[expense.category];
     bucket.cents += cents;
     bucket.count += 1;
   }
+
+  groups.car.cents = car.cents;
+  groups.car.count = input.expenses.filter((expense) => expense.category === "car").length;
 
   for (const bucket of Object.values(groups)) {
     bucket.wholeDollars = wholeDollarsFromCents(bucket.cents);
@@ -109,6 +121,9 @@ export function calculateClaims(input: {
     tools: groups.tools,
     subscriptions: groups.subscriptions,
     other: groups.other,
+    car: groups.car,
+    carKilometres: car.kilometres,
+    carClaimKilometres: car.claimKilometres,
     taxAffairs: groups["tax-affairs"],
     receiptsCents,
     receiptCount: input.expenses.length,

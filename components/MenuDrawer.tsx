@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import type { TextScale, ThemePreference } from "@/lib/display";
 
@@ -37,6 +38,10 @@ export function MenuDrawer({
   onTextScale,
   onClose,
   onBackup,
+  onAccount,
+  onLogOff,
+  rentalsEnabled,
+  onRentals,
 }: {
   theme: ThemePreference;
   textScale: TextScale;
@@ -44,7 +49,12 @@ export function MenuDrawer({
   onTextScale: (scale: TextScale) => void;
   onClose: () => void;
   onBackup: () => void;
+  onAccount: () => void;
+  onLogOff: () => void;
+  rentalsEnabled: boolean;
+  onRentals: (enabled: boolean) => void;
 }) {
+  const router = useRouter();
   const titleId = useId();
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -101,9 +111,62 @@ export function MenuDrawer({
             </div>
             <p className="text-xs leading-5 text-fog">Theme and text size apply across TaxTrack on this device.</p>
           </section>
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-fog">Features</h3>
+            <button
+              type="button"
+              aria-pressed={rentalsEnabled}
+              onClick={() => onRentals(!rentalsEnabled)}
+              className="flex w-full items-center justify-between rounded-lg border border-line bg-ink/40 px-3 py-2.5 text-left transition hover:border-mint/40"
+            >
+              <span>
+                <span className="block text-sm font-semibold">Enable Rental Properties</span>
+                <span className="mt-0.5 block text-xs text-fog">
+                  {rentalsEnabled ? "Rentals is in the menu. Totals and reports include them." : "Hidden. Rental records stay on this device."}
+                </span>
+              </span>
+              <span className={rentalsEnabled ? "text-xs font-bold uppercase tracking-wider text-mint" : "text-xs font-bold uppercase tracking-wider text-fog"}>
+                {rentalsEnabled ? "On" : "Off"}
+              </span>
+            </button>
+          </section>
+          <button
+            type="button"
+            onClick={onAccount}
+            className="flex w-full items-center justify-between rounded-lg border border-line bg-ink/40 px-3 py-2.5 text-left transition hover:border-mint/40"
+          >
+            <span>
+              <span className="block text-sm font-semibold">Account</span>
+              <span className="mt-0.5 block text-xs text-fog">Upload or download the encrypted copy</span>
+            </span>
+            <span className="text-mint" aria-hidden>
+              ›
+            </span>
+          </button>
+          <Link
+            href="/changelog"
+            onClick={(event) => {
+              event.preventDefault();
+              onClose();
+              router.push("/changelog");
+            }}
+            className="flex w-full items-center justify-between rounded-lg border border-line bg-ink/40 px-3 py-2.5 text-left transition hover:border-mint/40"
+          >
+            <span>
+              <span className="block text-sm font-semibold">Changelog</span>
+              <span className="mt-0.5 block text-xs text-fog">What has shipped, and what is in progress</span>
+            </span>
+            <span className="text-mint" aria-hidden>
+              ›
+            </span>
+          </Link>
           <Link
             href="/faq"
-            onClick={onClose}
+            onClick={(event) => {
+              event.preventDefault();
+              onClose();
+              router.push("/faq");
+            }}
             className="flex w-full items-center justify-between rounded-lg border border-line bg-ink/40 px-3 py-2.5 text-left transition hover:border-mint/40"
           >
             <span>
@@ -121,10 +184,20 @@ export function MenuDrawer({
           >
             <span>
               <span className="block text-sm font-semibold">Data and backup</span>
-              <span className="mt-0.5 block text-xs text-fog">Export or import this browser</span>
+              <span className="mt-0.5 block text-xs text-fog">JSON backup, or an Excel or PDF report</span>
             </span>
             <span className="text-mint" aria-hidden>
               ›
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={onLogOff}
+            className="flex w-full items-center justify-between rounded-lg border border-line bg-ink/40 px-3 py-2.5 text-left transition hover:border-rose/40"
+          >
+            <span>
+              <span className="block text-sm font-semibold">Log off</span>
+              <span className="mt-0.5 block text-xs text-fog">Return to the sign-in page</span>
             </span>
           </button>
         </div>

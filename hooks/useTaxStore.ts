@@ -7,7 +7,7 @@ import { backupToState, createEmptyState, mergeBackups, stateToBackup, validateB
 import { createId } from "@/lib/id";
 import { clearReceipts, deleteReceipt } from "@/lib/receiptStore";
 import { loadState, saveState, STORAGE_KEY } from "@/lib/storage";
-import type { AppState, DayLog, Expense, YearId } from "@/lib/types";
+import type { AppState, DayLog, DepreciatingAsset, Expense, RentalExpense, YearId } from "@/lib/types";
 
 interface Snapshot {
   state: AppState;
@@ -176,7 +176,67 @@ function createApi(snapshot: Snapshot) {
       commit({ state: createEmptyState(), notice: null, hydrated: true });
     },
     setDefaultHours(hours: number) {
-      update((current) => ({ ...current, settings: { defaultWfhHours: hours } }));
+      update((current) => ({ ...current, settings: { ...current.settings, defaultWfhHours: hours } }));
+    },
+    setRentalProperties(enabled: boolean) {
+      update((current) => ({ ...current, settings: { ...current.settings, rentalProperties: enabled } }));
+    },
+    addProperty(address: string) {
+      const property = { id: createId(), address: address.trim() };
+      update((current) => ({ ...current, properties: [...(current.properties ?? []), property] }));
+      return property.id;
+    },
+    renameProperty(id: string, address: string) {
+      update((current) => ({
+        ...current,
+        properties: (current.properties ?? []).map((property) => (property.id === id ? { ...property, address: address.trim() } : property)),
+      }));
+    },
+    removeProperty(id: string) {
+      update((current) => {
+        const years = { ...current.years };
+        for (const yearId of Object.keys(years) as YearId[]) {
+          const year = years[yearId];
+          years[yearId] = {
+            ...year,
+            rentalExpenses: (year.rentalExpenses ?? []).filter((expense) => expense.propertyId !== id),
+          };
+        }
+        return { ...current, years, properties: (current.properties ?? []).filter((property) => property.id !== id) };
+      });
+    },
+    saveRentalExpense(yearId: YearId, expense: RentalExpense) {
+      update((current) =>
+        withYear(current, yearId, (year) => {
+          const next = { ...expense, id: expense.id || createId(), notes: expense.notes ?? "" };
+          const rentalExpenses = [...(year.rentalExpenses ?? [])];
+          const index = rentalExpenses.findIndex((item) => item.id === next.id);
+          if (index >= 0) rentalExpenses[index] = next;
+          else rentalExpenses.push(next);
+          return { ...year, rentalExpenses };
+        }),
+      );
+    },
+    deleteRentalExpense(yearId: YearId, id: string) {
+      update((current) =>
+        withYear(current, yearId, (year) => ({
+          ...year,
+          rentalExpenses: (year.rentalExpenses ?? []).filter((expense) => expense.id !== id),
+        })),
+      );
+    },
+    saveAsset(asset: DepreciatingAsset) {
+      update((current) => {
+        const next = { ...asset, id: asset.id || createId(), notes: asset.notes ?? "", description: asset.description.trim() };
+        const assets = [...(current.assets ?? [])];
+        const index = assets.findIndex((item) => item.id === next.id);
+        if (index >= 0) assets[index] = next;
+        else assets.push(next);
+        return { ...current, assets };
+      });
+    },
+    deleteAsset(id: string) {
+      update((current) => ({ ...current, assets: (current.assets ?? []).filter((asset) => asset.id !== id) }));
     },
   };
 }

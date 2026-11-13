@@ -8,7 +8,7 @@ export function cx(...parts: Array<string | false | null | undefined>): string {
 }
 
 export const inputClass =
-  "min-h-11 w-full rounded-xl border border-line bg-ink px-3 text-base text-paper outline-none placeholder:text-fog/70 focus-visible:border-mint sm:text-sm";
+  "min-h-11 w-full rounded-xl border border-line bg-ink px-3 text-paper outline-none placeholder:text-fog/70 focus-visible:border-mint";
 
 export const buttonClass = {
   primary:

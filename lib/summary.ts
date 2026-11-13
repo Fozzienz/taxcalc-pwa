@@ -3,7 +3,10 @@ import { FIXED_RATE_INCLUDES } from "@/lib/ato-rules";
 import { calculateClaims, type ClaimFigures } from "@/lib/calculations";
 import { formatLongDate, formatPeriod } from "@/lib/dates";
 import { formatCents, formatHours, formatWholeDollars, toCents, wholeDollarsFromCents } from "@/lib/money";
-import { categoryById, type Expense, type YearData } from "@/lib/types";
+import { categoryById, type DepreciatingAsset, type Expense, type RentalProperty, type YearData } from "@/lib/types";
+import { formatKilometres, summariseCar } from "@/lib/car";
+import { summariseDecline } from "@/lib/depreciation";
+import { summariseRentals } from "@/lib/rentals";
 
 export interface SummaryRow {
   label: string;
@@ -43,21 +46,32 @@ function formatMoneySafe(expense: Expense): string {
   return formatCents(toCents(expense.amount));
 }
 
-export function buildSummary(year: FinancialYear, data: YearData): SummaryModel {
+export function buildSummary(
+  year: FinancialYear,
+  data: YearData,
+  options: { rentals?: boolean; properties?: readonly RentalProperty[]; assets?: readonly DepreciatingAsset[] } = {},
+): SummaryModel {
   const figures = calculateClaims({
     centsPerHour: year.wfhCentsPerHour,
+    carCentsPerKm: year.carCentsPerKm,
     dayLogs: Object.values(data.dayLogs),
     expenses: data.expenses,
   });
   const clothing = combined([figures.clothing.cents, figures.laundry.cents]);
   const otherWork = combined([figures.tools.cents, figures.subscriptions.cents, figures.other.cents]);
+  const car = summariseCar(data.expenses, year.carCentsPerKm);
+  const rental = summariseRentals(data.rentalExpenses ?? [], options.properties ?? []);
+  const decline = summariseDecline(options.assets ?? [], year);
   const totalDollars =
     figures.wfhDollars +
     clothing.dollars +
     figures.selfEducation.wholeDollars +
     figures.donations.wholeDollars +
     otherWork.dollars +
-    figures.taxAffairs.wholeDollars;
+    figures.car.wholeDollars +
+    figures.taxAffairs.wholeDollars +
+    (options.rentals ? rental.dollars : 0) +
+    ((options.assets ?? []).length > 0 ? decline.dollars : 0);
 
   const blocks: SummaryBlock[] = [
     {
@@ -129,6 +143,34 @@ export function buildSummary(year: FinancialYear, data: YearData): SummaryModel 
         "This is separate from the working-from-home figure. If myTax has one box for all other work-related expenses, add the two whole-dollar amounts together.",
       ],
     },
+    ...(figures.car.count > 0
+      ? [
+          {
+            id: "car",
+            title: "Work-related car expenses",
+            kicker: "Cents per kilometre",
+            rows: [
+              { label: "Kilometres logged", value: `${formatKilometres(car.kilometres)} km` },
+              ...(Math.abs(car.claimKilometres - car.kilometres) > 0.001
+                ? [{ label: "Kilometres that count", value: `${formatKilometres(car.claimKilometres)} km` }]
+                : []),
+              { label: "Rate", value: `${formatCents(year.carCentsPerKm)} per km` },
+              ...(car.vehicles.length > 1
+                ? car.vehicles.map((row) => ({
+                    label: row.vehicle,
+                    value: `${formatKilometres(row.claimKilometres)} km · ${formatCents(row.cents)}`,
+                  }))
+                : []),
+              { label: "Enter", value: formatWholeDollars(figures.car.wholeDollars), strong: true },
+            ],
+            notes: [
+              `The ${formatCents(year.carCentsPerKm)} rate covers fuel, registration, insurance, servicing, and decline in value. Do not claim those again.`,
+              "The claim stops at 5,000 km for each car. Keep a note of how you worked the kilometres out. Trips between home and your regular workplace are not included.",
+              ...(year.id === "2027-28" ? ["Confirm the 2027–28 cents per kilometre rate before you lodge."] : []),
+            ],
+          },
+        ]
+      : []),
     {
       id: "tax",
       title: "Cost of managing tax affairs",
@@ -140,6 +182,39 @@ export function buildSummary(year: FinancialYear, data: YearData): SummaryModel 
       notes: ["Claim the fee in the year you paid it."],
     },
   ];
+
+  if ((options.assets ?? []).length > 0) {
+    blocks.push({
+      id: "decline",
+      title: "Decline in value",
+      kicker: "Depreciating assets · days held divided by 365",
+      rows: [
+        ...decline.rows.map((row) => ({ label: row.description, value: formatCents(row.claimCents) })),
+        { label: "Enter", value: formatWholeDollars(decline.dollars), strong: true },
+      ],
+      notes: [
+        "Prime cost spreads the purchase price over the effective life. Diminishing value uses 200% of that rate on the opening value. An item of $300 or less, used mainly for work, is an immediate deduction in the year you first used it.",
+      ],
+    });
+  }
+
+  if (options.rentals) {
+    blocks.push({
+      id: "rentals",
+      title: "Rental properties",
+      kicker: "Rent received, and the rental expenses you logged",
+      rows: [
+        { label: "Rent received", value: formatCents(rental.incomeCents) },
+        { label: "Rent received, whole dollars", value: formatWholeDollars(rental.incomeDollars) },
+        ...rental.byProperty.map((property) => ({ label: property.address, value: formatCents(property.cents) })),
+        ...rental.byCategory.filter((row) => row.cents > 0).map((row) => ({ label: row.label, value: formatCents(row.cents) })),
+        { label: "Enter", value: formatWholeDollars(rental.dollars), strong: true },
+      ],
+      notes: [
+        "Rent received is income. Enter is the rental expenses, with the cents dropped. TaxTrack does not split private use, work out decline in value, or decide if a repair is a capital improvement.",
+      ],
+    });
+  }
 
   const exclusionRows = [
     ...figures.depreciating.map((expense) => `Depreciating asset · ${assetLine(expense)}`),
@@ -155,7 +230,7 @@ export function buildSummary(year: FinancialYear, data: YearData): SummaryModel 
     `${year.label} income year (${formatPeriod(year.start, year.end)}).`,
     "Whole dollars. Cents disregarded, not rounded.",
     year.rateNote,
-    "TaxTrack does not calculate decline in value. A depreciating asset is listed at its full cost and kept out of the total.",
+    "A tool over $300 logged under Expenses stays at its full cost in Not in the total. Log it under Assets for the yearly decline in value.",
     ...(figures.workExpensesNeedEvidence
       ? ["Work-related expenses are over $300, so written evidence is required for the expenses you claim."]
       : []),
@@ -199,8 +274,11 @@ function plainText(
   }
 
   lines.push(`TOTAL TO ENTER: ${formatWholeDollars(model.totalDollars)}`);
+  const rentalEnter = model.blocks.find((block) => block.id === "rentals")?.rows.find((row) => row.label === "Enter")?.value;
+  const declineEnter = model.blocks.find((block) => block.id === "decline")?.rows.find((row) => row.label === "Enter")?.value;
+  const carEnter = model.blocks.find((block) => block.id === "car")?.rows.find((row) => row.label === "Enter")?.value;
   lines.push(
-    `Working from home ${formatWholeDollars(model.figures.wfhDollars)} + clothing and laundry ${formatWholeDollars(clothingDollars)} + self-education ${formatWholeDollars(model.figures.selfEducation.wholeDollars)} + other work expenses ${formatWholeDollars(otherWorkDollars)} + donations ${formatWholeDollars(model.figures.donations.wholeDollars)} + tax affairs ${formatWholeDollars(model.figures.taxAffairs.wholeDollars)}.`,
+    `Working from home ${formatWholeDollars(model.figures.wfhDollars)} + clothing and laundry ${formatWholeDollars(clothingDollars)} + self-education ${formatWholeDollars(model.figures.selfEducation.wholeDollars)} + other work expenses ${formatWholeDollars(otherWorkDollars)} + donations ${formatWholeDollars(model.figures.donations.wholeDollars)} + tax affairs ${formatWholeDollars(model.figures.taxAffairs.wholeDollars)}${carEnter ? ` + car expenses ${carEnter}` : ""}${declineEnter ? ` + decline in value ${declineEnter}` : ""}${rentalEnter ? ` + rental properties ${rentalEnter}` : ""}.`,
   );
   lines.push("");
   lines.push(model.exclusionTitle.toUpperCase());

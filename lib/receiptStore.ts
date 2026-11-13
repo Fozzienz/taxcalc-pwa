@@ -102,7 +102,7 @@ export async function installReceiptImages(file: BackupFile, mode: "merge" | "re
       }
       expenses.push({ ...rest, receiptId });
     }
-    years[year.id] = { dayLogs: file.years[year.id].dayLogs, expenses };
+    years[year.id] = { dayLogs: file.years[year.id].dayLogs, expenses, rentalExpenses: file.years[year.id].rentalExpenses ?? [] };
   }
   return { ...file, years };
 }
@@ -120,7 +120,7 @@ export async function withReceiptImages(file: BackupFile): Promise<BackupFile> {
       const receiptImage = await getReceipt(expense.receiptId);
       expenses.push(receiptImage ? { ...expense, receiptImage } : expense);
     }
-    years[year.id] = { dayLogs: file.years[year.id].dayLogs, expenses };
+    years[year.id] = { dayLogs: file.years[year.id].dayLogs, expenses, rentalExpenses: file.years[year.id].rentalExpenses ?? [] };
   }
   return { ...file, years };
 }

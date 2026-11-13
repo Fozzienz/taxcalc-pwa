@@ -6,7 +6,8 @@ import { DISCLAIMER, FIXED_RATE_INCLUDES, type FinancialYear } from "@/lib/ato-r
 import { daysLeftInYear, formatMediumDate, formatPeriod, yearStatus } from "@/lib/dates";
 import { formatCents, formatHours, formatWholeDollars, toCents } from "@/lib/money";
 import type { SummaryModel } from "@/lib/summary";
-import { modeById, type DayLog, type Expense } from "@/lib/types";
+import { modeById, type DayLog, type DepreciatingAsset, type Expense, type RentalExpense, type RentalProperty } from "@/lib/types";
+import { ReportActions } from "@/components/ReportActions";
 import { buttonClass, cx, Panel } from "@/components/ui";
 
 export function Dashboard({
@@ -17,6 +18,8 @@ export function Dashboard({
   onOpenDay,
   onEditExpense,
   onBrowse,
+  rentals,
+  assets,
 }: {
   year: FinancialYear;
   summary: SummaryModel;
@@ -25,6 +28,8 @@ export function Dashboard({
   onOpenDay: (date: string) => void;
   onEditExpense: (id: string) => void;
   onBrowse: (tab: "calendar" | "expenses") => void;
+  rentals?: { enabled: boolean; properties: RentalProperty[]; expenses: RentalExpense[] };
+  assets?: readonly DepreciatingAsset[];
 }) {
   const figures = summary.figures;
   const status = yearStatus(year);
@@ -38,6 +43,7 @@ export function Dashboard({
     figures.tools.cents,
     figures.subscriptions.cents,
     figures.other.cents,
+    figures.car.cents,
     figures.taxAffairs.cents,
     1,
   );
@@ -50,6 +56,7 @@ export function Dashboard({
     ["Tools and equipment", figures.tools.cents],
     ["Subscriptions", figures.subscriptions.cents],
     ["Other work expenses", figures.other.cents],
+    ["Car", figures.car.cents],
     ["Tax agent fees", figures.taxAffairs.cents],
   ] as const;
   const heldCents =
@@ -119,7 +126,7 @@ export function Dashboard({
       </Panel>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <SummaryCard summary={summary} />
+        <SummaryCard year={year} logs={logs} expenses={expenses} summary={summary} rentals={rentals} assets={assets} />
         <div className="space-y-4">
           <Panel>
             <h3 className="font-semibold">Already inside the 70 cent rate</h3>
@@ -210,7 +217,21 @@ function Stat({ label, value, detail }: { label: string; value: string; detail: 
   );
 }
 
-function SummaryCard({ summary }: { summary: SummaryModel }) {
+function SummaryCard({
+  year,
+  logs,
+  expenses,
+  summary,
+  rentals,
+  assets,
+}: {
+  year: FinancialYear;
+  logs: DayLog[];
+  expenses: Expense[];
+  summary: SummaryModel;
+  rentals?: { enabled: boolean; properties: RentalProperty[]; expenses: RentalExpense[] };
+  assets?: readonly DepreciatingAsset[];
+}) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -238,6 +259,10 @@ function SummaryCard({ summary }: { summary: SummaryModel }) {
           {copied ? "Copied" : "Copy summary"}
         </button>
       </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <ReportActions year={year} logs={logs} expenses={expenses} rentals={rentals} assets={assets} />
+      </div>
+      <p className="mt-2 text-xs leading-5 text-fog">Excel downloads a workbook. The PDF is the printout, with the TaxTrack name and logo, for tax time or an accountant.</p>
       <div className="mt-4 space-y-4">
         {summary.blocks.map((block) => (
           <section key={block.id}>
