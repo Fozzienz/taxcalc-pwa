@@ -9,15 +9,19 @@ const TOPICS: { title: string; body: string }[] = [
   },
   {
     title: "Where your records live",
-    body: "Sign in before the summary. TaxTrack encrypts the income years, hours, expenses, assets, rentals, and receipt files on this device, then stores only unreadable text. That is the zero-knowledge model: the server cannot read the records or the recovery key. Log off in the menu returns to the sign-in page. The records remain saved.",
+    body: "Sign in before the summary. TaxTrack encrypts the income years, hours, expenses, assets, rentals, and receipt files on this device, then stores only unreadable text. That is the zero-knowledge model: the server cannot read the records or the recovery key. Signing in on another device opens the same records. Log off returns to the sign-in page.",
   },
   {
     title: "Recovery key",
     body: "The recovery key is shown once, on the first sign-in. TaxTrack does not keep a readable copy. Save it somewhere you can still open. A password reset asks for that key. Without it, the new password cannot open the records.",
   },
   {
+    title: "Change password",
+    body: "Menu, Account, then Change password. Enter the current password and the new one. TaxTrack wraps the records with the new password on this device. The recovery key stays the same. Forgot password is for when you cannot sign in, and that path asks for the recovery key.",
+  },
+  {
     title: "Another device",
-    body: "Menu, Account, then Upload this device sends the encrypted copy. On the other device, sign in and choose Download to this device. Download replaces what is on that device. Upload replaces the synced copy. Data and backup still exports a JSON file you can keep yourself.",
+    body: "Sign in with the same email and password. TaxTrack opens that account's records on this device. Changes are encrypted here and stored with the account, so the next sign-in opens the latest save. Data and backup still exports a JSON file you can keep yourself.",
   },
   {
     title: "Working from home",

@@ -23,6 +23,8 @@ export function accountError(error: unknown): string {
   const message = error instanceof Error ? error.message : "Something went wrong.";
   const lower = message.toLowerCase();
   if (lower.includes("invalid login")) return "That email or password is not right. If you just created an account, open the confirmation email first.";
+  if (lower.includes("reauthentication") || lower.includes("nonce")) return "Sign out, sign in again, then change the password. A session older than a day has to be fresh.";
+  if (lower.includes("different from the old")) return "Choose a password that is different from the current one.";
   if (lower.includes("already registered") || lower.includes("already been registered")) return "That email already has an account. Sign in instead.";
   if (error instanceof DOMException && error.name === "OperationError") return "That password or recovery key does not open this account.";
   return message;
@@ -83,6 +85,44 @@ export async function signUpAccount(email: string, password: string): Promise<{ 
   if (error) throw error;
   if (!data.session || !data.user) return { recoveryKey: null, confirmEmail: true };
   return { recoveryKey: await openVault(data.user.id, password), confirmEmail: false };
+}
+
+/** Changes the sign-in password and re-wraps the vault. The recovery key stays the same. */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  if (newPassword.length < 8) throw new Error("Use at least 8 characters.");
+  if (currentPassword === newPassword) throw new Error("Choose a password that is different from the current one.");
+  const { data, error } = await client().auth.getUser();
+  if (error) throw error;
+  const userId = data.user?.id;
+  if (!userId) throw new Error("Sign in before changing the password.");
+  const profile = await fetchVaultProfileKeys(userId);
+  if (!profile.passwordWrappedKey || !profile.encryptionSalt) {
+    throw new Error("This account has no vault yet. Sign in again from the email screen.");
+  }
+  let vaultKey: CryptoKey;
+  try {
+    vaultKey = await unlockVaultWithPassword(currentPassword, profile.encryptionSalt, profile.passwordWrappedKey);
+  } catch (unwrapError) {
+    if (unwrapError instanceof DOMException && unwrapError.name === "OperationError") {
+      throw new Error("That current password does not open this account.");
+    }
+    throw unwrapError;
+  }
+  const passwordWrappedKey = await rewrapVaultForNewPassword(vaultKey, newPassword, profile.encryptionSalt);
+  const { error: updateError } = await client().auth.updateUser({
+    password: newPassword,
+    current_password: currentPassword,
+  });
+  if (updateError) throw updateError;
+  const { error: saveError } = await client().from("profiles").update({ password_wrapped_key: passwordWrappedKey }).eq("id", userId);
+  if (saveError) {
+    const { error: revertError } = await client().auth.updateUser({ password: currentPassword });
+    if (revertError) {
+      throw new Error("The sign-in password changed, but the records were not re-wrapped. Use Forgot password and the recovery key to finish.");
+    }
+    throw saveError;
+  }
+  setVaultKey(vaultKey);
 }
 
 export async function sendPasswordReset(email: string) {

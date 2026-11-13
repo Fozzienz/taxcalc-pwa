@@ -6,7 +6,7 @@ import { DISCLAIMER } from "@/lib/ato-rules";
 import { visibleFinancialYears } from "@/lib/dates";
 import { buildSummary } from "@/lib/summary";
 import { useDisplay } from "@/hooks/useDisplay";
-import { useTaxStore } from "@/hooks/useTaxStore";
+import { startAccountSync, stopAccountSync, useTaxStore } from "@/hooks/useTaxStore";
 import type { YearId } from "@/lib/types";
 import { AccountModal } from "@/components/AccountModal";
 import { AuthScreen } from "@/components/AuthScreen";
@@ -48,6 +48,7 @@ export function AppShell() {
   const [authReady, setAuthReady] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [held, setHeld] = useState(false);
+  const [accountReady, setAccountReady] = useState(false);
 
   const summary = useMemo(() => {
     if (!store.ready) return null;
@@ -89,8 +90,31 @@ export function AppShell() {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  const splash = useBootSplash(store.ready && summary !== null);
   const entered = supabaseConfigured && authReady && Boolean(sessionEmail) && unlocked && !held;
+  const splash = useBootSplash(store.ready && summary !== null && (!entered || accountReady));
+  useEffect(() => {
+    if (!entered || !supabase) {
+      stopAccountSync();
+      setAccountReady(false);
+      return;
+    }
+    let cancel = false;
+    setAccountReady(false);
+    void (async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (cancel) return;
+      if (error || !data.user) {
+        setAccountReady(true);
+        return;
+      }
+      await startAccountSync(data.user.id);
+      if (!cancel) setAccountReady(true);
+    })();
+    return () => {
+      cancel = true;
+      stopAccountSync();
+    };
+  }, [entered]);
   if (!store.ready || !authReady || splash !== "gone" || !summary) {
     return (
       <>
@@ -100,11 +124,11 @@ export function AppShell() {
     );
   }
 
-  if (!entered) {
+  if (!entered || !accountReady) {
     return (
       <>
         <DisplayApplier theme={display.theme} textScale={display.textScale} />
-        <AuthScreen />
+        {entered ? <BootSplash leaving={false} /> : <AuthScreen />}
       </>
     );
   }
@@ -276,7 +300,7 @@ export function AppShell() {
         />
       ) : null}
       {overlay.type === "account" ? (
-        <AccountModal state={store.state} onClose={() => setOverlay({ type: "none" })} onReplace={(file) => store.replaceAll(file)} />
+        <AccountModal onClose={() => setOverlay({ type: "none" })} />
       ) : null}
       {overlay.type === "backup" ? (
         <BackupModal

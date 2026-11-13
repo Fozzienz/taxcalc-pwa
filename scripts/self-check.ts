@@ -11,7 +11,7 @@ import { parseChangelog, readChangelog } from "../lib/changelog";
 import { summariseRentals } from "../lib/rentals";
 import { depreciationSchedule } from "../lib/depreciation";
 import { summariseCar } from "../lib/car";
-import { createUserVaultBundle, decryptJson, encryptJson, unlockVaultWithPassword, unlockVaultWithRecoveryKey } from "../lib/crypto/vaultCrypto";
+import { createUserVaultBundle, decryptJson, encryptJson, rewrapVaultForNewPassword, unlockVaultWithPassword, unlockVaultWithRecoveryKey } from "../lib/crypto/vaultCrypto";
 import * as XLSX from "xlsx";
 import type { DepreciatingAsset, Expense, YearData } from "../lib/types";
 
@@ -385,9 +385,12 @@ assert(legacyExpense.ok && legacyExpense.data.years["2025-26"].expenses[0]?.kilo
 
 const changelog = parseChangelog("## [Unreleased]\n\n### Added\n\n- 2026-11-13 — Rental properties\n");
 assert(changelog.releases[0]?.version === "Unreleased" && changelog.releases[0].subsections[0]?.items[0]?.date === "2026-11-13", "the changelog keeps the date on each item");
-assert(readChangelog().releases.some((release) => release.version === "0.1.0"), "the published changelog has the first version");
-const published = readChangelog().releases.find((release) => release.version === "0.1.0");
-assert(published?.subsections[0]?.items.every((item) => !item.date && item.text.length < 90), "published changelog bullets are short and undated");
+const published = readChangelog().releases.filter((release) => release.version !== "Unreleased");
+assert(published.some((release) => release.version === "0.2.0"), "the published changelog has the production version");
+assert(
+  published.every((release) => release.subsections.every((subsection) => subsection.items.every((item) => !item.date && item.text.length < 90))),
+  "published changelog bullets are short and undated",
+);
 
 checkVault()
   .then(() => console.log("TaxTrack checks passed"))
@@ -404,6 +407,10 @@ async function checkVault() {
   const passwordKey = await unlockVaultWithPassword("correct horse", bundle.encryptionSalt, bundle.passwordWrappedKey);
   const fromPassword = await decryptJson<{ hours: number }>(passwordKey, encrypted);
   assert(fromPassword.hours === 7.6, "the password unwraps the record");
+  const rewrapped = await rewrapVaultForNewPassword(passwordKey, "new horse battery", bundle.encryptionSalt);
+  const changedKey = await unlockVaultWithPassword("new horse battery", bundle.encryptionSalt, rewrapped);
+  const fromChanged = await decryptJson<{ hours: number }>(changedKey, encrypted);
+  assert(fromChanged.hours === 7.6, "a new password unwraps the same record");
   const recoveryKey = await unlockVaultWithRecoveryKey(bundle.recoveryKey, bundle.recoverySalt, bundle.recoveryWrappedKey);
   const fromRecovery = await decryptJson<{ hours: number }>(recoveryKey, encrypted);
   assert(fromRecovery.hours === 7.6, "the recovery key unwraps the record");

@@ -9,14 +9,14 @@ What is in the app, and what is waiting. This is a working list, not a promise o
 - JSON backup from Data and backup.
 - Sign-in is required before the summary. Email and password.
 - Vault key created in the browser. Password and recovery key wrap it. Supabase stores the wraps, salts, and ciphertext.
-- Upload this device, and download to this device, for the encrypted record and each receipt file.
+- Signing in opens that account's encrypted records on the device. Later changes are encrypted and stored with the account.
+- Change password from Account. The new password re-wraps the vault. The recovery key stays the same.
 
 ## Later
 
 - Biometrics on this device, such as Face ID, Touch ID, or Windows Hello, to unlock the vault without retyping the password.
 - A PIN on this device, as a backup when biometrics are unavailable.
 - The vault key stays in memory only until those exist. A refresh asks for the password again.
-- Automatic sync. Upload and download stay as separate actions so one device does not silently replace the other.
 - Custom email sender. The built-in Supabase mailer is enough for one account.
 
 ## Supabase

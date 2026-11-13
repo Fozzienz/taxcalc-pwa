@@ -4,6 +4,8 @@ What’s new in TaxTrack. Plain language only.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-13
+
 ### Added
 
 - Rental properties. Turn them on in the menu.
@@ -13,12 +15,14 @@ What’s new in TaxTrack. Plain language only.
 - Car kilometres on Expenses, at the ATO cents per kilometre rate.
 - Email sign-in is required before the summary. Records sync as encrypted text.
 - Log off, in the menu, returns to the sign-in page.
+- Change password from Account, while signed in.
 
 ### Changed
 
 - Rental addresses stack in a list. Add address opens in a box.
 - Pinch zoom is off. Text size in the menu still changes the type.
 - Opening screen says the records are zero-knowledge encrypted.
+- Sign-in opens that account's records. Later changes are stored with it.
 
 ## [0.1.0] - 2026-11-13
 
