@@ -4,6 +4,8 @@ What’s new in TaxTrack. Plain language only.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
 ### Changed
 
 - The rental log uses the address selected above. Rename address is a separate button.
