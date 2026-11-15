@@ -48,7 +48,6 @@ export function AppShell() {
   const [authReady, setAuthReady] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
   const [held, setHeld] = useState(false);
-  const [accountReady, setAccountReady] = useState(false);
 
   const summary = useMemo(() => {
     if (!store.ready) return null;
@@ -91,31 +90,25 @@ export function AppShell() {
   }, []);
 
   const entered = supabaseConfigured && authReady && Boolean(sessionEmail) && unlocked && !held;
-  const splash = useBootSplash(store.ready && summary !== null && (!entered || accountReady));
+  const recordsReady = Boolean(store.ready && summary);
+  const splash = useBootSplash(recordsReady);
   useEffect(() => {
     if (!entered || !supabase) {
       stopAccountSync();
-      setAccountReady(false);
       return;
     }
     let cancel = false;
-    setAccountReady(false);
     void (async () => {
       const { data, error } = await supabase.auth.getUser();
-      if (cancel) return;
-      if (error || !data.user) {
-        setAccountReady(true);
-        return;
-      }
+      if (cancel || error || !data.user) return;
       await startAccountSync(data.user.id);
-      if (!cancel) setAccountReady(true);
     })();
     return () => {
       cancel = true;
       stopAccountSync();
     };
   }, [entered]);
-  if (!store.ready || !authReady || splash !== "gone" || !summary) {
+  if (splash !== "gone") {
     return (
       <>
         <DisplayApplier theme={display.theme} textScale={display.textScale} />
@@ -124,11 +117,11 @@ export function AppShell() {
     );
   }
 
-  if (!entered || !accountReady) {
+  if (!store.ready || !entered || !summary) {
     return (
       <>
         <DisplayApplier theme={display.theme} textScale={display.textScale} />
-        {entered ? <BootSplash leaving={false} /> : <AuthScreen />}
+        <AuthScreen />
       </>
     );
   }
@@ -263,19 +256,21 @@ export function AppShell() {
 
       <footer className="mx-auto mt-8 w-full max-w-6xl px-4 pb-28 text-xs leading-5 text-fog sm:px-6 lg:pb-10">{DISCLAIMER}</footer>
 
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur sm:hidden" aria-label="Sections">
-        <div className="grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+      <nav className="taxtrack-tabbar pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur sm:hidden" aria-label="Sections">
+        <div className="mx-auto flex max-w-lg items-stretch justify-between gap-1 px-2">
           {tabs.map((item) => {
             const Icon = item.icon;
+            const active = tab === item.id;
             return (
               <button
                 key={item.id}
                 type="button"
-                className={cx("flex min-h-14 flex-col items-center justify-center gap-1 text-[11px]", tab === item.id ? "text-mint" : "text-fog")}
+                className={cx("flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2", active ? "text-mint" : "text-fog")}
+                aria-current={active ? "page" : undefined}
                 onClick={() => openTab(item.id)}
               >
-                <Icon size={18} />
-                {item.label}
+                <Icon size={18} className="shrink-0" />
+                <span>{item.label}</span>
               </button>
             );
           })}

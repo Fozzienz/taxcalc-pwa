@@ -24,11 +24,19 @@ export function useBootSplash(ready: boolean): "show" | "leave" | "gone" {
   }, []);
 
   useEffect(() => {
-    if (!ready || phase !== "show") return;
-    const remaining = Math.max(0, MIN_MS - (Date.now() - started.current));
-    const leaveTimer = window.setTimeout(() => setPhase("leave"), remaining);
+    if (phase !== "show") return;
+    const elapsed = Date.now() - started.current;
+    const delay = ready ? Math.max(0, MIN_MS - elapsed) : Math.max(0, 4000 - elapsed);
+    const leaveTimer = window.setTimeout(() => setPhase("leave"), delay);
     return () => window.clearTimeout(leaveTimer);
   }, [ready, phase]);
+
+  useEffect(() => {
+    const cap = window.setTimeout(() => {
+      setPhase((current) => (current === "show" ? "leave" : current));
+    }, 4000);
+    return () => window.clearTimeout(cap);
+  }, []);
 
   useEffect(() => {
     if (phase !== "leave") return;
