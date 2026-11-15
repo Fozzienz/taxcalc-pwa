@@ -34,6 +34,8 @@ export function RentalManager({
   const [addressError, setAddressError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState(properties[0]?.id ?? "");
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const [category, setCategory] = useState<RentalCategory>("council-rates");
   const [record, setRecord] = useState<"income" | "expense">("expense");
   const [date, setDate] = useState(year.start);
@@ -64,6 +66,13 @@ export function RentalManager({
     setSelectedId(id);
     setConfirmRemove(false);
     closeAddress();
+  }
+
+  function saveRename() {
+    const next = renameValue.trim();
+    if (!selected || !next) return;
+    onRenameProperty(selected.id, next);
+    setRenaming(false);
   }
 
   function saveExpense() {
@@ -171,6 +180,30 @@ export function RentalManager({
         </Modal>
       ) : null}
 
+      {renaming && selected ? (
+        <Modal title="Rename address" onClose={() => setRenaming(false)}>
+          <form
+            className="grid gap-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveRename();
+            }}
+          >
+            <Field label="Address">
+              <input className={inputClass} value={renameValue} onChange={(event) => setRenameValue(event.target.value)} />
+            </Field>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className={buttonClass.primary}>
+                Save address
+              </button>
+              <button type="button" className={buttonClass.ghost} onClick={() => setRenaming(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
       {properties.length === 0 ? (
         <Panel>
           <p className="text-sm text-fog">Add an address to start a rental record for this income year.</p>
@@ -204,20 +237,6 @@ export function RentalManager({
 
           {selected ? (
             <Panel className="space-y-4">
-              <Field label="Address">
-                <input
-                  key={selected.id}
-                  className={inputClass}
-                  name="street-address"
-                  autoComplete="section-rental street-address"
-                  defaultValue={selected.address}
-                  onBlur={(event) => {
-                    const next = event.target.value.trim();
-                    if (next) onRenameProperty(selected.id, next);
-                    else event.target.value = selected.address;
-                  }}
-                />
-              </Field>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Date">
                   <input className={inputClass} type="date" min={year.start} max={year.end} value={date} onChange={(event) => setDate(event.target.value)} />
@@ -258,6 +277,16 @@ export function RentalManager({
               <div className="flex flex-wrap gap-2">
                 <button type="button" className={buttonClass.primary} onClick={saveExpense}>
                   {record === "income" ? "Add rent" : "Add expense"}
+                </button>
+                <button
+                  type="button"
+                  className={buttonClass.ghost}
+                  onClick={() => {
+                    setRenameValue(selected.address);
+                    setRenaming(true);
+                  }}
+                >
+                  Rename address
                 </button>
                 {confirmRemove ? (
                   <button

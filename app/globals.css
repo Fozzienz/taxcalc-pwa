@@ -72,6 +72,22 @@ textarea {
   font: inherit;
 }
 
+/* The phone section bar stays compact when the text size is large. */
+.taxtrack-tabbar button {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.taxtrack-tabbar button span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* iOS zooms the page when a focused field is under 16px. Stay at least 16px, and grow with the text size. */
 input,
 select,

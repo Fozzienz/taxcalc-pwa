@@ -4,6 +4,14 @@ What’s new in TaxTrack. Plain language only.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-15
+
+### Changed
+
+- The rental log uses the address selected above. Rename address is a separate button.
+- The phone section bar gives each label its own space.
+- The opening screen moves on instead of staying up.
+
 ## [0.2.0] - 2026-11-13
 
 ### Added
