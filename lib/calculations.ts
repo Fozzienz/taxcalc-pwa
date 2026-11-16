@@ -1,7 +1,7 @@
 import { assetTreatment, DONATION_MINIMUM_CENTS, LAUNDRY_WRITTEN_EVIDENCE_CENTS, WORK_RELATED_EVIDENCE_CENTS } from "@/lib/ato-rules";
 import { summariseCar } from "@/lib/car";
 import { deductionCents, portionCents, toCents, wholeDollarsFromCents } from "@/lib/money";
-import type { DayLog, Expense, ExpenseCategory } from "@/lib/types";
+import { isRunningCost, type DayLog, type Expense, type ExpenseCategory, type WfhMethod } from "@/lib/types";
 
 export interface MoneyTotal {
   cents: number;
@@ -25,6 +25,13 @@ export interface ClaimFigures {
   carKilometres: number;
   carClaimKilometres: number;
   taxAffairs: MoneyTotal;
+  energy: MoneyTotal;
+  phone: MoneyTotal;
+  internet: MoneyTotal;
+  stationery: MoneyTotal;
+  runningCents: number;
+  /** Running-cost bills saved while the fixed rate is selected. */
+  runningHeld: number;
   receiptsCents: number;
   receiptCount: number;
   depreciating: Expense[];
@@ -38,7 +45,11 @@ function emptyTotal(): MoneyTotal {
   return { cents: 0, wholeDollars: 0, count: 0 };
 }
 
-export function expenseClaimCents(expense: Expense, carClaim?: ReadonlyMap<string, number>): number {
+export function expenseClaimCents(expense: Expense, carClaim?: ReadonlyMap<string, number>, wfhMethod: WfhMethod = "fixed"): number {
+  if (isRunningCost(expense.category)) {
+    if (wfhMethod !== "actual") return 0;
+    return portionCents(expense.amount, expense.workUsePercent);
+  }
   if (expense.category === "car") return carClaim?.get(expense.id) ?? 0;
   const treatment = assetTreatment(expense);
   if (treatment === "depreciating") return 0;
@@ -55,12 +66,14 @@ export function calculateClaims(input: {
   carCentsPerKm: number;
   dayLogs: readonly DayLog[];
   expenses: readonly Expense[];
+  wfhMethod?: WfhMethod;
 }): ClaimFigures {
+  const wfhMethod = input.wfhMethod === "actual" ? "actual" : "fixed";
   const wfhTenths = input.dayLogs.reduce((total, log) => {
     if (log.mode !== "wfh" || log.hours <= 0) return total;
     return total + Math.round(log.hours * 10);
   }, 0);
-  const wfhCents = deductionCents(wfhTenths, input.centsPerHour);
+  const wfhCents = wfhMethod === "actual" ? 0 : deductionCents(wfhTenths, input.centsPerHour);
   const groups: Record<ExpenseCategory, MoneyTotal> = {
     clothing: emptyTotal(),
     laundry: emptyTotal(),
@@ -68,6 +81,10 @@ export function calculateClaims(input: {
     "self-education": emptyTotal(),
     tools: emptyTotal(),
     subscriptions: emptyTotal(),
+    energy: emptyTotal(),
+    phone: emptyTotal(),
+    internet: emptyTotal(),
+    stationery: emptyTotal(),
     car: emptyTotal(),
     "tax-affairs": emptyTotal(),
     other: emptyTotal(),
@@ -77,15 +94,17 @@ export function calculateClaims(input: {
   const heldDonations: Expense[] = [];
   const smallDonations: Expense[] = [];
   const car = summariseCar(input.expenses, input.carCentsPerKm);
+  let runningHeld = 0;
 
   for (const expense of input.expenses) {
+    if (isRunningCost(expense.category) && wfhMethod !== "actual") runningHeld += 1;
     if (assetTreatment(expense) === "depreciating") depreciating.push(expense);
     if (expense.category === "donations") {
       if (toCents(expense.amount) < DONATION_MINIMUM_CENTS) smallDonations.push(expense);
       else if (!expense.dgrConfirmed) heldDonations.push(expense);
     }
     if (expense.category === "car") continue;
-    const cents = expenseClaimCents(expense);
+    const cents = expenseClaimCents(expense, undefined, wfhMethod);
     if (cents <= 0) continue;
     const bucket = groups[expense.category];
     bucket.cents += cents;
@@ -100,8 +119,10 @@ export function calculateClaims(input: {
   }
 
   const receiptsCents = input.expenses.reduce((total, expense) => total + toCents(expense.amount), 0);
+  const runningCents = groups.energy.cents + groups.phone.cents + groups.internet.cents + groups.stationery.cents;
   const workRelatedCents =
     wfhCents +
+    runningCents +
     groups.clothing.cents +
     groups.laundry.cents +
     groups["self-education"].cents +
@@ -125,6 +146,12 @@ export function calculateClaims(input: {
     carKilometres: car.kilometres,
     carClaimKilometres: car.claimKilometres,
     taxAffairs: groups["tax-affairs"],
+    energy: groups.energy,
+    phone: groups.phone,
+    internet: groups.internet,
+    stationery: groups.stationery,
+    runningCents,
+    runningHeld,
     receiptsCents,
     receiptCount: input.expenses.length,
     depreciating,

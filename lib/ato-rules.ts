@@ -95,7 +95,11 @@ export const CATEGORY_HINTS: Record<ExpenseCategory, string> = {
   tools:
     "The $300 test uses the full cost. At $300 or under, the work-related portion can be an immediate write-off. Over $300, claim decline in value rather than the full price. A set costing more than $300 works the same way.",
   subscriptions:
-    "Work-related software, union, or professional subscriptions. Enter your work-related share. Leave out phone, internet, and stationery if you use the 70 cent rate.",
+    "Work-related software, union, or professional subscriptions. Enter your work-related share. Leave out phone, internet, and stationery when this year uses the 70 cent rate.",
+  energy: "The work share of electricity and gas used while working from home. Used when this income year is on actual costs.",
+  phone: "The work share of mobile and home phone bills. A 4-week pattern is a common way to set the percentage.",
+  internet: "The work share of home and mobile internet. A 4-week pattern is a common way to set the percentage.",
+  stationery: "Paper, ink, and other computer consumables, for the work share only.",
   car:
     "Work kilometres in a car you own or lease. TaxTrack multiplies them by the ATO rate for this income year, up to 5,000 km for each car. The rate already covers fuel, registration, insurance, servicing, and decline in value.",
   "tax-affairs":

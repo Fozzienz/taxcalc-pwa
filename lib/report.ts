@@ -5,7 +5,7 @@ import { formatPeriod, formatTimestamp } from "@/lib/dates";
 import { formatCents, formatHours, formatWholeDollars, toCents, wholeDollarsFromCents } from "@/lib/money";
 import { depreciationForPeriod, depreciationMethodLabel } from "@/lib/depreciation";
 import { buildSummary, type SummaryModel } from "@/lib/summary";
-import { categoryById, modeById, rentalCategoryById, type DepreciatingAsset, type Expense, type RentalProperty, type YearData } from "@/lib/types";
+import { categoryById, isRunningCost, modeById, rentalCategoryById, type DepreciatingAsset, type Expense, type RentalProperty, type WfhMethod, type YearData } from "@/lib/types";
 
 export interface YearReport {
   filenameBase: string;
@@ -19,6 +19,7 @@ export interface YearReport {
   hourNote: string;
   wfhHours: number;
   wfhDays: number;
+  wfhMethodLabel: string;
   rateAud: number;
   expenseRows: Array<{
     date: string;
@@ -66,7 +67,8 @@ function aud(cents: number): number {
   return Math.round(cents) / 100;
 }
 
-function inclusion(expense: Expense, claimCents: number): string {
+function inclusion(expense: Expense, claimCents: number, wfhMethod: WfhMethod): string {
+  if (isRunningCost(expense.category) && wfhMethod !== "actual") return "No - covered by the fixed rate";
   if (expense.category === "car" && claimCents <= 0) return "No - over 5,000 km for this car";
   if (assetTreatment(expense) === "depreciating") return "No - depreciating asset, not in the total";
   if (expense.category === "donations" && toCents(expense.amount) < 200) return "No - under $2";
@@ -76,7 +78,7 @@ function inclusion(expense: Expense, claimCents: number): string {
 
 function enterDollars(summary: SummaryModel, id: string): number {
   const figures = summary.figures;
-  if (id === "wfh") return figures.wfhDollars;
+  if (id === "wfh") return wholeDollarsFromCents(summary.wfhMethod === "actual" ? figures.runningCents : figures.wfhCents);
   if (id === "clothing") return wholeDollarsFromCents(figures.clothing.cents + figures.laundry.cents);
   if (id === "donations") return figures.donations.wholeDollars;
   if (id === "education") return figures.selfEducation.wholeDollars;
@@ -101,6 +103,7 @@ export function buildYearReport(
   options: { rentals?: boolean; properties?: readonly RentalProperty[]; assets?: readonly DepreciatingAsset[] } = {},
 ): YearReport {
   const summary = buildSummary(year, data, options);
+  const wfhMethod: WfhMethod = summary.wfhMethod;
   const days = Object.values(data.dayLogs).sort((a, b) => a.date.localeCompare(b.date));
   const expenses = [...data.expenses].sort((a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description));
   const tripClaims = carClaims(expenses, year.carCentsPerKm);
@@ -127,9 +130,13 @@ export function buildYearReport(
       counts: log.mode === "wfh" && log.hours > 0 ? "Yes" : "No",
       notes: log.notes,
     })),
-    hourNote: `${formatHours(summary.figures.wfhHours)} hours over ${summary.figures.wfhDays} ${summary.figures.wfhDays === 1 ? "day" : "days"} count toward the fixed rate. Exact amount ${formatCents(summary.figures.wfhCents)}. Enter ${formatWholeDollars(summary.figures.wfhDollars)}.`,
+    hourNote:
+      wfhMethod === "actual"
+        ? `${formatHours(summary.figures.wfhHours)} hours over ${summary.figures.wfhDays} ${summary.figures.wfhDays === 1 ? "day" : "days"} are the record. Enter ${formatWholeDollars(wholeDollarsFromCents(summary.figures.runningCents))} from the work share of the bills.`
+        : `${formatHours(summary.figures.wfhHours)} hours over ${summary.figures.wfhDays} ${summary.figures.wfhDays === 1 ? "day" : "days"} count toward the fixed rate. Exact amount ${formatCents(summary.figures.wfhCents)}. Enter ${formatWholeDollars(summary.figures.wfhDollars)}.`,
     wfhHours: Math.round(summary.figures.wfhHours * 10) / 10,
     wfhDays: summary.figures.wfhDays,
+    wfhMethodLabel: wfhMethod === "actual" ? "Actual costs" : "Fixed rate",
     rateAud: aud(year.wfhCentsPerHour),
     expenseRows: expenses.map((expense) => ({
       date: auDate(expense.date),
@@ -139,10 +146,10 @@ export function buildYearReport(
       payment: expense.paymentMethod === "card" ? "Card" : expense.paymentMethod === "cash" ? "Cash" : "Other",
       amountAud: aud(toCents(expense.amount)),
       workUse: expense.workUsePercent,
-      claimAud: aud(expenseClaimCents(expense, tripClaims)),
-      claimLabel: formatCents(expenseClaimCents(expense, tripClaims)),
+      claimAud: aud(expenseClaimCents(expense, tripClaims, wfhMethod)),
+      claimLabel: formatCents(expenseClaimCents(expense, tripClaims, wfhMethod)),
       amountLabel: formatCents(toCents(expense.amount)),
-      included: inclusion(expense, expenseClaimCents(expense, tripClaims)),
+      included: inclusion(expense, expenseClaimCents(expense, tripClaims, wfhMethod), wfhMethod),
       notes: expense.notes,
     })),
     exclusions: summary.exclusionRows.length > 0 ? summary.exclusionRows : ["Nothing is held out of the estimate."],
@@ -210,8 +217,8 @@ export function buildCsvReport(
     ...report.summaryRows.map((row) => csvLine([row.item, row.detail, row.enterDollars])),
     csvLine(["Total to enter", "", report.totalDollars]),
     csvLine([]),
-    csvLine(["=== WORK FROM HOME — Fixed rate ==="]),
-    csvLine(["Date", "Mode", "Hours", "Counts toward the fixed rate", "Notes"]),
+    csvLine([report.wfhMethodLabel === "Actual costs" ? "=== WORK FROM HOME — Actual costs ===" : "=== WORK FROM HOME — Fixed rate ==="]),
+    csvLine(["Date", "Mode", "Hours", report.wfhMethodLabel === "Actual costs" ? "Worked from home" : "Counts toward the fixed rate", "Notes"]),
     ...(report.hourRows.length > 0
       ? report.hourRows.map((row) => csvLine([row.date, row.mode, row.hours, row.counts, row.notes]))
       : [csvLine(["No days logged"])]),

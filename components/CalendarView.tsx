@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Paperclip } from "lucide-react";
-import { calendarCells, formatLongDate, formatMonth, initialMonth, isWeekend, monthsOf, WEEKDAYS } from "@/lib/dates";
+import { calendarCells, formatLongDate, formatMonth, initialMonth, isUsualWorkDay, monthsOf, WEEKDAYS } from "@/lib/dates";
 import { holidayOn } from "@/lib/holidays";
 import { formatHours } from "@/lib/money";
-import { modeById, type DayLog, type Expense } from "@/lib/types";
+import { modeById, type DayLog, type Expense, type WfhMethod } from "@/lib/types";
 import type { FinancialYear } from "@/lib/ato-rules";
 import { buttonClass, cx, Panel } from "@/components/ui";
 
@@ -13,11 +13,15 @@ export function CalendarView({
   year,
   logs,
   expenses,
+  wfhMethod,
+  workDays,
   onOpenDay,
 }: {
   year: FinancialYear;
   logs: Record<string, DayLog>;
   expenses: Expense[];
+  wfhMethod: WfhMethod;
+  workDays: readonly number[];
   onOpenDay: (date: string) => void;
 }) {
   const months = monthsOf(year.start, year.end);
@@ -48,7 +52,9 @@ export function CalendarView({
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Hours diary</h2>
           <p className="mt-1 max-w-xl text-sm leading-6 text-fog">
-            Log the hours you actually worked. The fixed-rate claim uses these working-from-home days, not an estimate.
+            {wfhMethod === "actual"
+              ? "Log the hours you actually worked. They are the record for this year. The claim comes from the work share of your bills."
+              : "Log the hours you actually worked. The fixed-rate claim uses these working-from-home days, not an estimate."}
           </p>
         </div>
         <p className="font-mono text-sm text-mint">
@@ -102,43 +108,48 @@ export function CalendarView({
         </div>
 
         <ul className="mt-4 flex flex-wrap gap-2 text-[11px] text-fog">
-          <Legend swatch="bg-black/30 border border-line" label="Weekend" />
+          <Legend swatch="bg-black/30 border border-line" label="Usual day off" />
           <Legend swatch="bg-rose/20 border border-rose/50" label="National holiday" />
           <Legend swatch="bg-gold/20 border border-gold/50" label="Queensland holiday" />
           <Legend swatch="bg-mint/20 border border-mint/50" label="Work from home" />
           <Legend swatch="bg-sky/20 border border-sky/40" label="Office" />
           <Legend swatch="bg-rose/10 border border-rose/30" label="Leave" />
           <Legend swatch="bg-gold/10 border border-gold/30" label="RDO" />
+          <Legend swatch="bg-paper/10 border border-line" label="Not working" />
         </ul>
         <p className="mt-3 text-xs leading-5 text-fog">
-          The Ekka public holiday is for the Brisbane area only. Other Queensland show holidays are not listed.
+          A usual work day with nothing logged is an office day. It does not add hours. Days outside your usual week are shaded. Open any day to log what you actually did. Mark Not working for time between jobs. Public holidays stay empty, including the Brisbane Ekka holiday. Other Queensland show holidays are not listed.
         </p>
 
         <div className="mt-4 grid grid-cols-7 gap-1">
-          {WEEKDAYS.map((day, index) => (
-            <div key={day} className={cx("px-1 py-1 text-center text-[11px] uppercase tracking-wide", index > 4 ? "text-fog" : "text-paper/80")}>
-              {day}
-            </div>
-          ))}
+          {WEEKDAYS.map((day, index) => {
+            const weekday = index === 6 ? 0 : index + 1;
+            return (
+              <div key={day} className={cx("px-1 py-1 text-center text-[11px] uppercase tracking-wide", workDays.includes(weekday) ? "text-paper/80" : "text-fog")}>
+                {day}
+              </div>
+            );
+          })}
           {cells.map((cell, index) => {
             if (!cell) return <div key={`empty-${index}`} />;
             const holiday = holidayOn(cell.iso);
-            const weekend = isWeekend(cell.iso);
+            const offDay = !isUsualWorkDay(cell.iso, workDays);
             const log = logs[cell.iso];
+            const assumedOffice = !log && !offDay && !holiday;
             const expenseCount = expensesByDate.get(cell.iso) ?? 0;
             return (
               <button
                 key={cell.iso}
                 type="button"
                 onClick={() => onOpenDay(cell.iso)}
-                aria-label={dayLabel(cell.iso, log, expenseCount)}
+                aria-label={dayLabel(cell.iso, log, expenseCount, assumedOffice, offDay)}
                 className={cx(
                   "focus-ring flex h-[4.5rem] flex-col rounded-xl border p-1 text-left sm:h-28 sm:p-2",
                   holiday
                     ? holiday.scope === "national"
                       ? "border-rose/40 bg-rose/10"
                       : "border-gold/40 bg-gold/10"
-                    : weekend
+                    : offDay
                       ? "border-line bg-paper/5 text-fog"
                       : "border-line bg-panel",
                   cell.iso === todayIso() && "ring-1 ring-mint",
@@ -161,6 +172,11 @@ export function CalendarView({
                         {modeById(log.mode).short}
                         {log.mode === "wfh" ? ` ${formatHours(log.hours)}h` : ""}
                       </span>
+                    </span>
+                  ) : assumedOffice ? (
+                    <span className="truncate text-[10px] font-medium text-fog sm:text-[11px]">
+                      <span className="sm:hidden">Off</span>
+                      <span className="hidden sm:inline">Office</span>
                     </span>
                   ) : (
                     <span />
@@ -191,6 +207,7 @@ function modeTone(mode: DayLog["mode"]): string {
   if (mode === "wfh") return "text-mint";
   if (mode === "office") return "text-sky";
   if (mode === "leave") return "text-rose";
+  if (mode === "not-working") return "text-fog";
   return "text-gold";
 }
 
@@ -201,13 +218,15 @@ function todayIso(): string {
   return `${today.getFullYear()}-${month}-${day}`;
 }
 
-function dayLabel(iso: string, log: DayLog | undefined, expenseCount: number): string {
+function dayLabel(iso: string, log: DayLog | undefined, expenseCount: number, assumedOffice: boolean, offDay: boolean): string {
   const parts = [formatLongDate(iso)];
   const holiday = holidayOn(iso);
   if (holiday) parts.push(`${holiday.scope === "national" ? "National" : "Queensland"} public holiday, ${holiday.name}`);
-  else if (isWeekend(iso)) parts.push("Weekend");
+  else if (offDay) parts.push("Not a usual work day");
   if (log) {
     parts.push(log.mode === "wfh" ? `${modeById(log.mode).label}, ${formatHours(log.hours)} hours` : modeById(log.mode).label);
+  } else if (assumedOffice) {
+    parts.push("Treated as an office day");
   }
   if (log?.receiptMarker) parts.push("Receipt flagged");
   if (expenseCount > 0) parts.push(`${expenseCount} expense${expenseCount === 1 ? "" : "s"} logged`);

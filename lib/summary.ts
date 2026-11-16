@@ -3,7 +3,7 @@ import { FIXED_RATE_INCLUDES } from "@/lib/ato-rules";
 import { calculateClaims, type ClaimFigures } from "@/lib/calculations";
 import { formatLongDate, formatPeriod } from "@/lib/dates";
 import { formatCents, formatHours, formatWholeDollars, toCents, wholeDollarsFromCents } from "@/lib/money";
-import { categoryById, type DepreciatingAsset, type Expense, type RentalProperty, type YearData } from "@/lib/types";
+import { categoryById, type DepreciatingAsset, type Expense, type RentalProperty, type WfhMethod, type YearData } from "@/lib/types";
 import { formatKilometres, summariseCar } from "@/lib/car";
 import { summariseDecline } from "@/lib/depreciation";
 import { summariseRentals } from "@/lib/rentals";
@@ -23,6 +23,7 @@ export interface SummaryBlock {
 }
 
 export interface SummaryModel {
+  wfhMethod: WfhMethod;
   totalDollars: number;
   blocks: SummaryBlock[];
   exclusionTitle: string;
@@ -51,19 +52,22 @@ export function buildSummary(
   data: YearData,
   options: { rentals?: boolean; properties?: readonly RentalProperty[]; assets?: readonly DepreciatingAsset[] } = {},
 ): SummaryModel {
+  const wfhMethod: WfhMethod = data.wfhMethod === "actual" ? "actual" : "fixed";
   const figures = calculateClaims({
     centsPerHour: year.wfhCentsPerHour,
     carCentsPerKm: year.carCentsPerKm,
     dayLogs: Object.values(data.dayLogs),
     expenses: data.expenses,
+    wfhMethod,
   });
   const clothing = combined([figures.clothing.cents, figures.laundry.cents]);
   const otherWork = combined([figures.tools.cents, figures.subscriptions.cents, figures.other.cents]);
   const car = summariseCar(data.expenses, year.carCentsPerKm);
   const rental = summariseRentals(data.rentalExpenses ?? [], options.properties ?? []);
   const decline = summariseDecline(options.assets ?? [], year);
+  const homeDollars = wholeDollarsFromCents(wfhMethod === "actual" ? figures.runningCents : figures.wfhCents);
   const totalDollars =
-    figures.wfhDollars +
+    homeDollars +
     clothing.dollars +
     figures.selfEducation.wholeDollars +
     figures.donations.wholeDollars +
@@ -77,18 +81,36 @@ export function buildSummary(
     {
       id: "wfh",
       title: "Working from home",
-      kicker: "Other work-related expenses · fixed rate method",
-      rows: [
-        { label: "Hours logged", value: formatHours(figures.wfhHours) },
-        { label: "Days logged", value: String(figures.wfhDays) },
-        { label: "Fixed rate", value: formatCents(year.wfhCentsPerHour) },
-        { label: "Exact amount", value: formatCents(figures.wfhCents) },
-        { label: "Enter", value: formatWholeDollars(figures.wfhDollars), strong: true },
-      ],
-      notes: [
-        "If myTax asks for hours, enter the hours and use its calculation. If it asks for dollars, enter the whole-dollar amount. Do not enter both.",
-        `The ${formatCents(year.wfhCentsPerHour)} rate already includes ${FIXED_RATE_INCLUDES.map((item) => item.toLowerCase()).join(", ")}. Do not claim those again.`,
-      ],
+      kicker: wfhMethod === "actual" ? "Other work-related expenses · actual cost method" : "Other work-related expenses · fixed rate method",
+      rows:
+        wfhMethod === "actual"
+          ? [
+              { label: "Hours logged", value: formatHours(figures.wfhHours) },
+              { label: "Days logged", value: String(figures.wfhDays) },
+              { label: "Electricity and gas", value: formatCents(figures.energy.cents) },
+              { label: "Phone", value: formatCents(figures.phone.cents) },
+              { label: "Internet", value: formatCents(figures.internet.cents) },
+              { label: "Stationery and consumables", value: formatCents(figures.stationery.cents) },
+              { label: "Enter", value: formatWholeDollars(homeDollars), strong: true },
+            ]
+          : [
+              { label: "Hours logged", value: formatHours(figures.wfhHours) },
+              { label: "Days logged", value: String(figures.wfhDays) },
+              { label: "Fixed rate", value: formatCents(year.wfhCentsPerHour) },
+              { label: "Exact amount", value: formatCents(figures.wfhCents) },
+              { label: "Enter", value: formatWholeDollars(figures.wfhDollars), strong: true },
+            ],
+      notes:
+        wfhMethod === "actual"
+          ? [
+              "The hours are the record that you worked from home. The claim is the work share of each bill.",
+              "A 4-week pattern is a common way to set the phone and internet percentage. Rent, mortgage interest, and council rates on your own home are not included.",
+            ]
+          : [
+              "If myTax asks for hours, enter the hours and use its calculation. If it asks for dollars, enter the whole-dollar amount. Do not enter both.",
+              `The ${formatCents(year.wfhCentsPerHour)} rate already includes ${FIXED_RATE_INCLUDES.map((item) => item.toLowerCase()).join(", ")}. Do not claim those again.`,
+              ...(figures.runningHeld > 0 ? ["Bills for energy, phone, internet, or stationery are saved and left out while the fixed rate is selected."] : []),
+            ],
     },
     {
       id: "clothing",
@@ -132,7 +154,7 @@ export function buildSummary(
     {
       id: "other",
       title: "Other work expenses",
-      kicker: "Other work-related expenses, excluding the fixed rate",
+      kicker: wfhMethod === "actual" ? "Other work-related expenses, excluding home running costs" : "Other work-related expenses, excluding the fixed rate",
       rows: [
         { label: "Tools and equipment, $300 or under", value: formatCents(figures.tools.cents) },
         { label: "Subscriptions", value: formatCents(figures.subscriptions.cents) },
@@ -238,6 +260,7 @@ export function buildSummary(
   ];
 
   const model: Omit<SummaryModel, "text"> = {
+    wfhMethod,
     totalDollars,
     blocks,
     exclusionTitle: "Not in the total",
@@ -246,7 +269,7 @@ export function buildSummary(
     figures,
   };
 
-  return { ...model, text: plainText(year, model, clothing.dollars, otherWork.dollars) };
+  return { ...model, text: plainText(year, model, clothing.dollars, otherWork.dollars, homeDollars) };
 }
 
 function plainText(
@@ -254,6 +277,7 @@ function plainText(
   model: Omit<SummaryModel, "text">,
   clothingDollars: number,
   otherWorkDollars: number,
+  homeDollars: number,
 ): string {
   const lines = [
     "TAXTRACK FIGURES FOR MYTAX",
@@ -278,7 +302,7 @@ function plainText(
   const declineEnter = model.blocks.find((block) => block.id === "decline")?.rows.find((row) => row.label === "Enter")?.value;
   const carEnter = model.blocks.find((block) => block.id === "car")?.rows.find((row) => row.label === "Enter")?.value;
   lines.push(
-    `Working from home ${formatWholeDollars(model.figures.wfhDollars)} + clothing and laundry ${formatWholeDollars(clothingDollars)} + self-education ${formatWholeDollars(model.figures.selfEducation.wholeDollars)} + other work expenses ${formatWholeDollars(otherWorkDollars)} + donations ${formatWholeDollars(model.figures.donations.wholeDollars)} + tax affairs ${formatWholeDollars(model.figures.taxAffairs.wholeDollars)}${carEnter ? ` + car expenses ${carEnter}` : ""}${declineEnter ? ` + decline in value ${declineEnter}` : ""}${rentalEnter ? ` + rental properties ${rentalEnter}` : ""}.`,
+    `Working from home ${formatWholeDollars(homeDollars)} + clothing and laundry ${formatWholeDollars(clothingDollars)} + self-education ${formatWholeDollars(model.figures.selfEducation.wholeDollars)} + other work expenses ${formatWholeDollars(otherWorkDollars)} + donations ${formatWholeDollars(model.figures.donations.wholeDollars)} + tax affairs ${formatWholeDollars(model.figures.taxAffairs.wholeDollars)}${carEnter ? ` + car expenses ${carEnter}` : ""}${declineEnter ? ` + decline in value ${declineEnter}` : ""}${rentalEnter ? ` + rental properties ${rentalEnter}` : ""}.`,
   );
   lines.push("");
   lines.push(model.exclusionTitle.toUpperCase());

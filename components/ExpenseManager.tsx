@@ -13,10 +13,12 @@ import { formatCents, formatMoney, portionCents, toCents } from "@/lib/money";
 import {
   CATEGORIES,
   categoryById,
+  isRunningCost,
   PAYMENT_METHODS,
   type Expense,
   type ExpenseCategory,
   type PaymentMethod,
+  type WfhMethod,
 } from "@/lib/types";
 import { buttonClass, cx, Field, inputClass, Modal, Panel } from "@/components/ui";
 
@@ -87,6 +89,7 @@ function useReceipt(id: string | null): string | null {
 
 export function ExpenseManager({
   year,
+  wfhMethod,
   expenses,
   draftDate,
   editingId,
@@ -94,6 +97,7 @@ export function ExpenseManager({
   onDelete,
 }: {
   year: FinancialYear;
+  wfhMethod: WfhMethod;
   expenses: Expense[];
   draftDate: string | null;
   editingId: string | null;
@@ -111,6 +115,7 @@ export function ExpenseManager({
     return draftDate ? { ...next, date: draftDate } : next;
   });
   const [error, setError] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
@@ -150,7 +155,7 @@ export function ExpenseManager({
       dgrConfirmed: category === "donations" ? current.dgrConfirmed : false,
       isEquipment: category === "self-education" || category === "other" ? current.isEquipment : false,
       workUsePercent:
-        category === "tools" || category === "self-education" || category === "other" ? current.workUsePercent : "100",
+        category === "tools" || category === "self-education" || category === "other" || isRunningCost(category) ? current.workUsePercent : "100",
       kilometres: category === "car" ? current.kilometres : "",
       vehicle: category === "car" ? current.vehicle : "",
     }));
@@ -237,6 +242,7 @@ export function ExpenseManager({
         return;
       }
     }
+    const editing = Boolean(form.id);
     onSave({
       id: form.id || createId(),
       date: form.date,
@@ -248,7 +254,7 @@ export function ExpenseManager({
       notes: form.notes.trim(),
       dgrConfirmed: form.category === "donations" ? form.dgrConfirmed : false,
       isEquipment: form.category === "self-education" || form.category === "other" ? form.isEquipment : false,
-      workUsePercent: equipment ? percent : 100,
+      workUsePercent: equipment || isRunningCost(form.category) ? percent : 100,
       kilometres,
       vehicle: carTrip ? form.vehicle.trim() : "",
       receiptId,
@@ -257,6 +263,7 @@ export function ExpenseManager({
     setWorkLoads("");
     setMixedLoads("");
     setError(null);
+    setSavedNote(editing ? "Expense updated." : "Expense added.");
   }
 
   function load(expense: Expense) {
@@ -288,7 +295,7 @@ export function ExpenseManager({
         </div>
         <form ref={formRef} className="mt-4" onSubmit={save} autoComplete="off">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={form.category === "car" ? "Purpose" : "Description"}>
+            <Field label={form.category === "car" ? "Purpose" : "Description"} required>
               <input
                 className={inputClass}
                 required
@@ -298,29 +305,29 @@ export function ExpenseManager({
                 onChange={(event) => setForm({ ...form, description: event.target.value })}
               />
             </Field>
-            <Field label="Date">
+            <Field label="Date" required>
               <input className={inputClass} type="date" required min={year.start} max={year.end} value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
             </Field>
             {form.category === "car" ? (
-              <Field label="Kilometres" hint={`The ${year.label} rate is ${formatCents(year.carCentsPerKm)} a kilometre.`}>
+              <Field label="Kilometres" required hint={`The ${year.label} rate is ${formatCents(year.carCentsPerKm)} a kilometre.`}>
                 <input className={inputClass} inputMode="decimal" placeholder="0" value={form.kilometres} onChange={(event) => setForm({ ...form, kilometres: event.target.value })} />
               </Field>
             ) : (
-              <Field label="Amount (AUD)" hint="Full cost for equipment. Work-related amount for other expenses.">
+              <Field label="Amount (AUD)" required hint="Full cost for equipment. Work-related amount for other expenses.">
                 <input className={inputClass} inputMode="decimal" placeholder="0.00" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} />
               </Field>
             )}
             <Field label="Category" hint={CATEGORY_HINTS[form.category]}>
               <select className={inputClass} value={form.category} onChange={(event) => updateCategory(event.target.value as ExpenseCategory)}>
-                {CATEGORIES.map((category) => (
+                {CATEGORIES.filter((category) => wfhMethod === "actual" || !isRunningCost(category.id) || category.id === form.category).map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.label}
                   </option>
                 ))}
               </select>
             </Field>
-            {equipment ? (
-              <Field label="Work use %" hint="The $300 test uses the full cost.">
+            {equipment || isRunningCost(form.category) ? (
+              <Field label="Work use %" hint={isRunningCost(form.category) ? "The claim is this share of the bill." : "The $300 test uses the full cost."}>
                 <input className={inputClass} inputMode="numeric" value={form.workUsePercent} onChange={(event) => setForm({ ...form, workUsePercent: event.target.value })} />
               </Field>
             ) : null}
@@ -448,6 +455,7 @@ export function ExpenseManager({
             <p className="mt-3 text-sm text-fog">Under $2 · this gift stays out of the total.</p>
           ) : null}
           {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
+          {savedNote ? <p className="mt-3 text-sm text-mint">{savedNote}</p> : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <button className={buttonClass.primary} type="submit" disabled={compressing}>
               {form.id ? "Save expense" : "Add expense"}

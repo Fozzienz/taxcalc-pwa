@@ -1,16 +1,29 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Menu, X } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, Menu, Palette, SlidersHorizontal, X, type LucideIcon } from "lucide-react";
+import { isValidHours } from "@/lib/dates";
 import type { TextScale, ThemePreference } from "@/lib/display";
+import { formatHours } from "@/lib/money";
+import { buttonClass, Field, inputClass } from "@/components/ui";
 
 const THEMES: { value: ThemePreference; label: string }[] = [
   { value: "dark", label: "Dark" },
   { value: "light", label: "Light" },
   { value: "system", label: "System" },
 ];
+
+const USUAL_DAYS = [
+  { day: 1, label: "Mon" },
+  { day: 2, label: "Tue" },
+  { day: 3, label: "Wed" },
+  { day: 4, label: "Thu" },
+  { day: 5, label: "Fri" },
+  { day: 6, label: "Sat" },
+  { day: 0, label: "Sun" },
+] as const;
 
 const SCALES: { value: TextScale; label: string }[] = [
   { value: "small", label: "Small" },
@@ -39,9 +52,15 @@ export function MenuDrawer({
   onClose,
   onBackup,
   onAccount,
-  onLogOff,
+  onDeleteAccount,
   rentalsEnabled,
   onRentals,
+  standardHours,
+  yearLabel,
+  yearWfhDays,
+  onStandardHours,
+  workDays,
+  onWorkDays,
 }: {
   theme: ThemePreference;
   textScale: TextScale;
@@ -50,12 +69,23 @@ export function MenuDrawer({
   onClose: () => void;
   onBackup: () => void;
   onAccount: () => void;
-  onLogOff: () => void;
+  onDeleteAccount: () => void;
   rentalsEnabled: boolean;
   onRentals: (enabled: boolean) => void;
+  standardHours: number;
+  yearLabel: string;
+  yearWfhDays: number;
+  onStandardHours: (hours: number, scope: "forward" | "year") => void;
+  workDays: readonly number[];
+  onWorkDays: (days: number[]) => void;
 }) {
   const router = useRouter();
   const titleId = useId();
+  const [hours, setHours] = useState(String(standardHours));
+  const [hoursError, setHoursError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [hoursNote, setHoursNote] = useState<string | null>(null);
+  const [daysNote, setDaysNote] = useState<string | null>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -87,7 +117,7 @@ export function MenuDrawer({
             <h2 id={titleId} className="text-lg font-bold tracking-wide">
               Menu
             </h2>
-            <p className="text-xs text-fog">Display on this device</p>
+            <p className="text-xs text-fog">On this device</p>
           </div>
           <button
             type="button"
@@ -98,9 +128,8 @@ export function MenuDrawer({
             <X className="size-4" />
           </button>
         </div>
-        <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
-          <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-fog">Display</h3>
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+          <MenuSection icon={Palette} title="Display">
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-wider text-fog">Theme</p>
               <Segmented options={THEMES} value={theme} onChange={onTheme} label="Theme" />
@@ -110,9 +139,112 @@ export function MenuDrawer({
               <Segmented options={SCALES} value={textScale} onChange={onTextScale} label="Text size" />
             </div>
             <p className="text-xs leading-5 text-fog">Theme and text size apply across TaxTrack on this device.</p>
-          </section>
-          <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-fog">Features</h3>
+          </MenuSection>
+          <MenuSection icon={Clock} title="Standard day">
+            <Field label="Hours per work-from-home day" hint="New days start with this. A single day can still be different.">
+              <input
+                className={inputClass}
+                type="number"
+                inputMode="decimal"
+                min={0.1}
+                max={24}
+                step={0.1}
+                value={hours}
+                onChange={(event) => {
+                  setHours(event.target.value);
+                  setConfirming(false);
+                  setHoursNote(null);
+                }}
+              />
+            </Field>
+            {hoursError ? <p className="text-sm text-rose">{hoursError}</p> : null}
+            {hoursNote ? <p className="text-sm text-fog">{hoursNote}</p> : null}
+            {confirming ? (
+              <div className="space-y-2">
+                <p className="text-sm leading-6 text-fog">
+                  Use {formatHours(Number(hours))} hours for new days, or rewrite the work-from-home days already logged in {yearLabel}?
+                </p>
+                <button
+                  type="button"
+                  className={`${buttonClass.primary} w-full`}
+                  onClick={() => {
+                    onStandardHours(Number(hours), "forward");
+                    setConfirming(false);
+                    setHoursNote("New days use this. Days already logged stay as they are.");
+                  }}
+                >
+                  Moving forward
+                </button>
+                <button
+                  type="button"
+                  className={`${buttonClass.ghost} w-full`}
+                  onClick={() => {
+                    onStandardHours(Number(hours), "year");
+                    setConfirming(false);
+                    setHoursNote(`Work-from-home days in ${yearLabel} now use this. Office, leave, RDO, and not working stay.`);
+                  }}
+                >
+                  This tax year
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={`${buttonClass.ghost} w-full`}
+                onClick={() => {
+                  const parsed = Number(hours);
+                  if (!isValidHours(parsed) || parsed <= 0) {
+                    setHoursError("Use 0.1 to 24 hours, in tenths.");
+                    setConfirming(false);
+                    return;
+                  }
+                  setHoursError(null);
+                  if (parsed === standardHours) {
+                    setHoursNote("That is already the standard day.");
+                    return;
+                  }
+                  if (yearWfhDays === 0) {
+                    onStandardHours(parsed, "forward");
+                    setHoursNote("New days use this. No work-from-home days are logged in this year yet.");
+                    return;
+                  }
+                  setHoursNote(null);
+                  setConfirming(true);
+                }}
+              >
+                Save standard day
+              </button>
+            )}
+          </MenuSection>
+          <MenuSection icon={CalendarDays} title="Usual days">
+            <p className="text-xs leading-5 text-fog">These days start as office days. The others are shaded. Open any day to log what you actually did.</p>
+            <div className="grid grid-cols-4 gap-2">
+              {USUAL_DAYS.map((item) => {
+                const on = workDays.includes(item.day);
+                return (
+                  <button
+                    key={item.day}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => {
+                      if (on && workDays.length === 1) {
+                        setDaysNote("Keep at least one usual day.");
+                        return;
+                      }
+                      setDaysNote(null);
+                      const next = on ? workDays.filter((day) => day !== item.day) : [...workDays, item.day];
+                      onWorkDays(next);
+                    }}
+                    className={on ? "focus-ring rounded-lg bg-mint px-2 py-2 text-sm font-semibold text-ink" : "focus-ring rounded-lg border border-line px-2 py-2 text-sm font-semibold text-fog"}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+            {daysNote ? <p className="text-xs text-gold">{daysNote}</p> : null}
+          </MenuSection>
+          <MenuSection icon={SlidersHorizontal} title="Features">
             <button
               type="button"
               aria-pressed={rentalsEnabled}
@@ -129,7 +261,7 @@ export function MenuDrawer({
                 {rentalsEnabled ? "On" : "Off"}
               </span>
             </button>
-          </section>
+          </MenuSection>
           <button
             type="button"
             onClick={onAccount}
@@ -192,17 +324,46 @@ export function MenuDrawer({
           </button>
           <button
             type="button"
-            onClick={onLogOff}
+            onClick={onDeleteAccount}
             className="flex w-full items-center justify-between rounded-lg border border-line bg-ink/40 px-3 py-2.5 text-left transition hover:border-rose/40"
           >
             <span>
-              <span className="block text-sm font-semibold">Log off</span>
-              <span className="mt-0.5 block text-xs text-fog">Return to the sign-in page</span>
+              <span className="block text-sm font-semibold">Delete account and data</span>
+              <span className="mt-0.5 block text-xs text-fog">Remove the sign-in and the encrypted records</span>
             </span>
           </button>
         </div>
       </aside>
     </>
+  );
+}
+
+function MenuSection({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="border-b border-line pb-4">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 rounded-lg py-1 text-left"
+      >
+        <span className="flex items-center gap-2">
+          <Icon className="size-4 text-mint" aria-hidden />
+          <span className="text-xs font-bold uppercase tracking-wider">{title}</span>
+        </span>
+        <ChevronDown className={open ? "size-4 shrink-0 rotate-180 text-fog" : "size-4 shrink-0 text-fog"} aria-hidden />
+      </button>
+      {open ? <div className="mt-3 space-y-3">{children}</div> : null}
+    </section>
   );
 }
 

@@ -1,5 +1,5 @@
 import { DEFAULT_WFH_HOURS, FINANCIAL_YEARS, isYearId, type FinancialYear } from "@/lib/ato-rules";
-import { isRealIsoDate, isValidHours, isWithin, financialYearIdFor } from "@/lib/dates";
+import { DEFAULT_WORK_DAYS, financialYearIdFor, isRealIsoDate, isValidHours, isWithin, normalWorkDays } from "@/lib/dates";
 import type {
   AppState,
   DayLog,
@@ -11,6 +11,7 @@ import type {
   RentalCategory,
   RentalExpense,
   RentalProperty,
+  WfhMethod,
   WorkMode,
   YearData,
   YearId,
@@ -32,6 +33,7 @@ export interface BackupYear {
   dayLogs: DayLog[];
   expenses: BackupExpense[];
   rentalExpenses: RentalExpense[];
+  wfhMethod?: WfhMethod;
 }
 
 export interface BackupFile {
@@ -40,7 +42,7 @@ export interface BackupFile {
   exportedAt?: string;
   note?: string;
   activeYear: YearId;
-  settings: { defaultWfhHours: number; rentalProperties: boolean };
+  settings: { defaultWfhHours: number; rentalProperties: boolean; workDays: number[] };
   properties: RentalProperty[];
   assets: DepreciatingAsset[];
   years: Record<YearId, BackupYear>;
@@ -50,7 +52,7 @@ export type ValidationResult = { ok: true; data: BackupFile } | { ok: false; err
 
 const CATEGORY_IDS = new Set<ExpenseCategory>(CATEGORIES.map((item) => item.id));
 const RENTAL_IDS = new Set<RentalCategory>(RENTAL_CATEGORIES.map((item) => item.id));
-const MODES = new Set<WorkMode>(["wfh", "office", "leave", "rdo"]);
+const MODES = new Set<WorkMode>(["wfh", "office", "leave", "rdo", "not-working"]);
 const PAYMENTS = new Set<PaymentMethod>(["card", "cash", "other"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -72,7 +74,7 @@ export function createEmptyState(today = new Date()): AppState {
   return {
     version: 1,
     activeYear: financialYearIdFor(today),
-    settings: { defaultWfhHours: DEFAULT_WFH_HOURS, rentalProperties: false },
+    settings: { defaultWfhHours: DEFAULT_WFH_HOURS, rentalProperties: false, workDays: [...DEFAULT_WORK_DAYS] },
     properties: [],
     assets: [],
     years,
@@ -87,6 +89,7 @@ export function stateToBackup(state: AppState, exportedAt?: string): BackupFile 
       dayLogs: Object.values(data.dayLogs).sort((a, b) => a.date.localeCompare(b.date)),
       expenses: [...data.expenses].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
       rentalExpenses: [...(data.rentalExpenses ?? [])].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
+      wfhMethod: data.wfhMethod === "actual" ? "actual" : "fixed",
     };
   }
   return {
@@ -98,6 +101,7 @@ export function stateToBackup(state: AppState, exportedAt?: string): BackupFile 
     settings: {
       defaultWfhHours: state.settings.defaultWfhHours,
       rentalProperties: state.settings.rentalProperties === true,
+      workDays: normalWorkDays(state.settings.workDays) ?? [...DEFAULT_WORK_DAYS],
     },
     properties: [...(state.properties ?? [])].sort((a, b) => a.address.localeCompare(b.address) || a.id.localeCompare(b.id)),
     assets: [...(state.assets ?? [])].sort((a, b) => a.purchased.localeCompare(b.purchased) || a.description.localeCompare(b.description)),
@@ -130,6 +134,7 @@ export function backupToState(file: BackupFile): AppState {
         receiptId: expense.receiptId,
       })),
       rentalExpenses: (source.rentalExpenses ?? []).map((expense) => ({ ...expense })),
+      wfhMethod: source.wfhMethod === "actual" ? "actual" : "fixed",
     };
   }
   return {
@@ -138,6 +143,7 @@ export function backupToState(file: BackupFile): AppState {
     settings: {
       defaultWfhHours: file.settings.defaultWfhHours,
       rentalProperties: file.settings.rentalProperties === true,
+      workDays: [...file.settings.workDays],
     },
     properties: file.properties.map((property) => ({ ...property })),
     assets: (file.assets ?? []).map((asset) => ({ ...asset })),
@@ -173,6 +179,7 @@ export function mergeBackups(current: BackupFile, incoming: BackupFile): BackupF
       dayLogs: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
       expenses: [...expenses.values()].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
       rentalExpenses: [...rentalExpenses.values()].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
+      wfhMethod: incoming.years[year.id].wfhMethod ?? current.years[year.id].wfhMethod ?? "fixed",
     };
   }
   const properties = new Map((current.properties ?? []).map((property) => [property.id, property]));
@@ -187,6 +194,7 @@ export function mergeBackups(current: BackupFile, incoming: BackupFile): BackupF
     settings: {
       defaultWfhHours: incoming.settings.defaultWfhHours,
       rentalProperties: incoming.settings.rentalProperties === true,
+      workDays: [...incoming.settings.workDays],
     },
     properties: [...properties.values()].sort((a, b) => a.address.localeCompare(b.address) || a.id.localeCompare(b.id)),
     assets: [...assets.values()].sort((a, b) => a.purchased.localeCompare(b.purchased) || a.description.localeCompare(b.description)),
@@ -573,6 +581,12 @@ export function validateBackup(value: unknown): ValidationResult {
   }
 
   let rentalProperties = false;
+  let workDays: number[] = [...DEFAULT_WORK_DAYS];
+  if (isRecord(value.settings) && value.settings.workDays !== undefined) {
+    const parsed = normalWorkDays(value.settings.workDays);
+    if (!parsed) push(errors, "Usual working days must be at least one day of the week, with no repeats.");
+    else workDays = parsed;
+  }
   if (isRecord(value.settings) && value.settings.rentalProperties !== undefined) {
     if (typeof value.settings.rentalProperties !== "boolean") push(errors, "The rental properties switch must be on or off.");
     else rentalProperties = value.settings.rentalProperties;
@@ -602,10 +616,16 @@ export function validateBackup(value: unknown): ValidationResult {
       years[year.id] = emptyBackupYear();
       continue;
     }
+    let wfhMethod: WfhMethod = "fixed";
+    if (raw.wfhMethod !== undefined) {
+      if (raw.wfhMethod !== "fixed" && raw.wfhMethod !== "actual") push(errors, `${year.label} needs fixed or actual for working from home.`);
+      else wfhMethod = raw.wfhMethod;
+    }
     years[year.id] = {
       dayLogs: validateDays(raw.dayLogs, year, errors),
       expenses: validateExpenses(raw.expenses, year, errors),
       rentalExpenses: validateRentalExpenses(raw.rentalExpenses, year, propertyIds, errors),
+      wfhMethod,
     };
   }
 
@@ -617,7 +637,7 @@ export function validateBackup(value: unknown): ValidationResult {
       version: 1,
       ...(typeof value.exportedAt === "string" ? { exportedAt: value.exportedAt } : {}),
       activeYear,
-      settings: { defaultWfhHours, rentalProperties },
+      settings: { defaultWfhHours, rentalProperties, workDays },
       properties,
       assets,
       years,

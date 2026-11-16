@@ -64,6 +64,30 @@ export function isWeekend(iso: string): boolean {
   return day === 0 || day === 6;
 }
 
+/** 0 is Sunday and 6 is Saturday. Monday to Friday is the usual week. */
+export const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5] as const;
+
+export function weekdayOf(iso: string): number {
+  return parseIsoDate(iso).getDay();
+}
+
+export function workDaysOrDefault(days: readonly number[] | undefined): number[] {
+  return normalWorkDays(days) ?? [...DEFAULT_WORK_DAYS];
+}
+
+/** Unique days from Sunday (0) to Saturday (6). Empty or invalid input returns null. */
+export function normalWorkDays(days: unknown): number[] | null {
+  if (!Array.isArray(days) || days.length === 0 || days.length > 7) return null;
+  const unique = [...new Set(days)];
+  if (unique.length !== days.length) return null;
+  if (!unique.every((day) => Number.isInteger(day) && day >= 0 && day <= 6)) return null;
+  return unique.sort((a, b) => a - b);
+}
+
+export function isUsualWorkDay(iso: string, workDays: readonly number[]): boolean {
+  return workDays.includes(weekdayOf(iso));
+}
+
 export function isWithin(iso: string, start: string, end: string): boolean {
   return iso >= start && iso <= end;
 }

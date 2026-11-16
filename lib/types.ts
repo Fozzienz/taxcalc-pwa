@@ -1,6 +1,6 @@
 export type YearId = "2025-26" | "2026-27" | "2027-28";
 
-export type WorkMode = "wfh" | "office" | "leave" | "rdo";
+export type WorkMode = "wfh" | "office" | "leave" | "rdo" | "not-working";
 
 export type ExpenseCategory =
   | "clothing"
@@ -9,9 +9,19 @@ export type ExpenseCategory =
   | "self-education"
   | "tools"
   | "subscriptions"
+  | "energy"
+  | "phone"
+  | "internet"
+  | "stationery"
   | "car"
   | "tax-affairs"
   | "other";
+
+export type WfhMethod = "fixed" | "actual";
+
+export function isRunningCost(category: ExpenseCategory): boolean {
+  return category === "energy" || category === "phone" || category === "internet" || category === "stationery";
+}
 
 export type PaymentMethod = "card" | "cash" | "other";
 
@@ -95,6 +105,8 @@ export interface YearData {
   dayLogs: Record<string, DayLog>;
   expenses: Expense[];
   rentalExpenses?: RentalExpense[];
+  /** Missing means the fixed rate. Chosen for this income year. */
+  wfhMethod?: WfhMethod;
 }
 
 export interface AppState {
@@ -104,6 +116,8 @@ export interface AppState {
     defaultWfhHours: number;
     /** Off until the person turns rental properties on in the menu. */
     rentalProperties?: boolean;
+    /** 0 is Sunday and 6 is Saturday. Missing means Monday to Friday. */
+    workDays?: number[];
   };
   properties?: RentalProperty[];
   assets?: DepreciatingAsset[];
@@ -123,6 +137,10 @@ export const CATEGORIES: readonly CategoryDefinition[] = [
   { id: "self-education", label: "Self-education", official: "Self-education expenses" },
   { id: "tools", label: "Tools / equipment", official: "Other work-related expenses" },
   { id: "subscriptions", label: "Subscriptions", official: "Other work-related expenses" },
+  { id: "energy", label: "Electricity and gas", official: "Other work-related expenses" },
+  { id: "phone", label: "Phone", official: "Other work-related expenses" },
+  { id: "internet", label: "Internet", official: "Other work-related expenses" },
+  { id: "stationery", label: "Stationery and consumables", official: "Other work-related expenses" },
   { id: "car", label: "Car (cents per km)", official: "Work-related car expenses" },
   { id: "tax-affairs", label: "Tax agent fees", official: "Cost of managing tax affairs" },
   { id: "other", label: "Other work expenses", official: "Other work-related expenses" },
@@ -138,7 +156,7 @@ export const WORK_MODES: readonly {
     id: "wfh",
     label: "Work from home",
     short: "WFH",
-    hint: "Counts toward the fixed-rate hours.",
+    hint: "Hours worked from home.",
   },
   {
     id: "office",
@@ -157,6 +175,12 @@ export const WORK_MODES: readonly {
     label: "RDO",
     short: "RDO",
     hint: "Rostered day off.",
+  },
+  {
+    id: "not-working",
+    label: "Not working",
+    short: "None",
+    hint: "Between jobs, or any day you were not employed. It does not add hours.",
   },
 ] as const;
 

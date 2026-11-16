@@ -40,7 +40,7 @@ export function buildTaxTrackWorkbook(
     [],
     ["WFH hours", report.wfhHours],
     ["WFH days", report.wfhDays],
-    ["WFH method", "Fixed rate"],
+    ["WFH method", report.wfhMethodLabel],
     ["WFH rate (AUD per hour)", report.rateAud],
     ["Est. WFH deduction (AUD)", wfhEnter],
     [],
@@ -50,8 +50,8 @@ export function buildTaxTrackWorkbook(
 
   const wfhRows: (string | number)[][] = [
     ["=== TAXTRACK ==="],
-    ["=== WORK FROM HOME — Fixed rate ==="],
-    ["Date", "Mode", "Hours", "Counts toward the fixed rate", "Notes"],
+    [report.wfhMethodLabel === "Actual costs" ? "=== WORK FROM HOME — Actual costs ===" : "=== WORK FROM HOME — Fixed rate ==="],
+    ["Date", "Mode", "Hours", report.wfhMethodLabel === "Actual costs" ? "Worked from home" : "Counts toward the fixed rate", "Notes"],
     ...(report.hourRows.length > 0
       ? report.hourRows.map((row) => [row.date, row.mode, row.hours, row.counts, row.notes])
       : [["No days logged", "", "", "", ""]]),

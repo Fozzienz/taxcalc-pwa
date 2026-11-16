@@ -8,7 +8,7 @@ import { createId } from "@/lib/id";
 import { clearReceipts, deleteReceipt } from "@/lib/receiptStore";
 import { pullAccount, uploadDevice } from "@/lib/syncRecords";
 import { ACCOUNT_KEY, loadState, PENDING_KEY, saveState, STORAGE_KEY } from "@/lib/storage";
-import type { AppState, DayLog, DepreciatingAsset, Expense, RentalExpense, YearId } from "@/lib/types";
+import type { AppState, DayLog, DepreciatingAsset, Expense, RentalExpense, WfhMethod, YearId } from "@/lib/types";
 
 interface Snapshot {
   state: AppState;
@@ -282,11 +282,26 @@ function createApi(snapshot: Snapshot) {
       void clearReceipts();
       commit({ state: createEmptyState(), notice: null, hydrated: true });
     },
-    setDefaultHours(hours: number) {
-      update((current) => ({ ...current, settings: { ...current.settings, defaultWfhHours: hours } }));
+    setWfhMethod(yearId: YearId, method: WfhMethod) {
+      update((current) => withYear(current, yearId, (year) => ({ ...year, wfhMethod: method })));
+    },
+    setStandardHours(yearId: YearId, hours: number, scope: "forward" | "year") {
+      update((current) => {
+        const next = { ...current, settings: { ...current.settings, defaultWfhHours: hours } };
+        if (scope === "forward") return next;
+        return withYear(next, yearId, (year) => ({
+          ...year,
+          dayLogs: Object.fromEntries(
+            Object.entries(year.dayLogs).map(([date, log]) => [date, log.mode === "wfh" ? { ...log, hours } : log]),
+          ),
+        }));
+      });
     },
     setRentalProperties(enabled: boolean) {
       update((current) => ({ ...current, settings: { ...current.settings, rentalProperties: enabled } }));
+    },
+    setWorkDays(days: number[]) {
+      update((current) => ({ ...current, settings: { ...current.settings, workDays: days } }));
     },
     addProperty(address: string) {
       const property = { id: createId(), address: address.trim() };
