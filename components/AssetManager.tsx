@@ -43,6 +43,8 @@ export function AssetManager({
   const [life, setLife] = useState("4");
   const [usePercent, setUsePercent] = useState("100");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
   const cost = Number(price);
   const years = Number(life);
   const workUse = Number(usePercent);
@@ -70,9 +72,26 @@ export function AssetManager({
   }
 
   function save() {
-    if (!previewAsset) return;
+    if (!draft.description.trim()) {
+      setSavedNote(null);
+      setError("Add a short description.");
+      return;
+    }
+    if (!Number.isFinite(cost) || cost <= 0) {
+      setSavedNote(null);
+      setError("Enter a price greater than zero.");
+      return;
+    }
+    if (!previewAsset) {
+      setSavedNote(null);
+      setError("Check the price, the work use, and the effective life.");
+      return;
+    }
+    const editing = Boolean(draft.id);
     onSave(previewAsset);
     clear();
+    setError(null);
+    setSavedNote(editing ? "Asset updated." : "Asset added.");
   }
 
   return (
@@ -88,19 +107,19 @@ export function AssetManager({
           </div>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Description">
+          <Field label="Description" required>
             <input className={inputClass} value={draft.description} placeholder="Laptop" onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
           </Field>
-          <Field label="First used" hint="The day you first used it to earn income.">
+          <Field label="First used" required hint="The day you first used it to earn income.">
             <input className={inputClass} type="date" value={draft.purchased} onChange={(event) => setDraft({ ...draft, purchased: event.target.value })} />
           </Field>
-          <Field label="Purchase price (AUD)">
+          <Field label="Purchase price (AUD)" required>
             <input className={inputClass} inputMode="decimal" value={price} placeholder="0.00" onChange={(event) => setPrice(event.target.value)} />
           </Field>
-          <Field label="Work use %">
+          <Field label="Work use %" required>
             <input className={inputClass} inputMode="numeric" value={usePercent} onChange={(event) => setUsePercent(event.target.value)} />
           </Field>
-          <Field label="Effective life (years)" hint="Used when the cost is over $300.">
+          <Field label="Effective life (years)" required hint="Used when the cost is over $300.">
             <input className={inputClass} inputMode="decimal" value={life} onChange={(event) => setLife(event.target.value)} />
           </Field>
           {immediate ? null : (
@@ -123,7 +142,7 @@ export function AssetManager({
           </p>
         ) : null}
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className={buttonClass.primary} disabled={!previewAsset} onClick={save}>
+          <button type="button" className={buttonClass.primary} onClick={save}>
             {draft.id ? "Save asset" : "Add asset"}
           </button>
           {draft.id ? (
@@ -132,6 +151,8 @@ export function AssetManager({
             </button>
           ) : null}
         </div>
+        {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
+        {savedNote ? <p className="mt-3 text-sm text-mint">{savedNote}</p> : null}
       </Panel>
 
       <div className="space-y-3">

@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Coffee, Flag, Home, MapPin, Paperclip, TreePalm } from "lucide-react";
+import { Building2, CircleOff, Coffee, Flag, Home, MapPin, Paperclip, TreePalm } from "lucide-react";
 import { holidayOn } from "@/lib/holidays";
 import { formatCents, formatHours, toCents } from "@/lib/money";
-import { formatLongDate } from "@/lib/dates";
+import { formatLongDate, isUsualWorkDay } from "@/lib/dates";
 import { isValidHours } from "@/lib/dates";
-import { modeById, WORK_MODES, type DayLog, type Expense, type WorkMode } from "@/lib/types";
+import { modeById, WORK_MODES, type DayLog, type Expense, type WfhMethod, type WorkMode } from "@/lib/types";
 import { buttonClass, cx, Field, inputClass, Modal } from "@/components/ui";
 
 const MODE_ICONS = {
@@ -14,6 +14,7 @@ const MODE_ICONS = {
   office: Building2,
   leave: TreePalm,
   rdo: Coffee,
+  "not-working": CircleOff,
 } as const;
 
 export function DayLogModal({
@@ -21,6 +22,8 @@ export function DayLogModal({
   existing,
   expenses,
   defaultHours,
+  wfhMethod,
+  workDays,
   onSave,
   onClear,
   onClose,
@@ -30,16 +33,15 @@ export function DayLogModal({
   existing?: DayLog;
   expenses: Expense[];
   defaultHours: number;
+  wfhMethod: WfhMethod;
+  workDays: readonly number[];
   onSave: (log: DayLog) => void;
   onClear: () => void;
   onClose: () => void;
   onAddExpense: () => void;
 }) {
   const holiday = holidayOn(date);
-  const [mode, setMode] = useState<WorkMode>(existing?.mode ?? "wfh");
-  const [useStandard, setUseStandard] = useState(
-    !existing || (existing.mode === "wfh" && existing.hours === defaultHours),
-  );
+  const [mode, setMode] = useState<WorkMode>(existing?.mode ?? (holiday || !isUsualWorkDay(date, workDays) ? "wfh" : "office"));
   const [hours, setHours] = useState(existing?.mode === "wfh" ? String(existing.hours) : String(defaultHours));
   const [notes, setNotes] = useState(existing?.notes ?? "");
   const [receiptMarker, setReceiptMarker] = useState(existing?.receiptMarker ?? false);
@@ -52,7 +54,7 @@ export function DayLogModal({
       return;
     }
     if (mode === "wfh") {
-      const parsed = useStandard ? defaultHours : Number(hours);
+      const parsed = Number(hours);
       if (!isValidHours(parsed) || parsed <= 0) {
         setError("Enter the hours you actually worked, in tenths, up to 24.");
         return;
@@ -104,20 +106,13 @@ export function DayLogModal({
           );
         })}
       </div>
-      <p className="mt-2 text-xs text-fog">{modeById(mode).hint}</p>
+      <p className="mt-2 text-xs text-fog">
+        {mode === "wfh" && wfhMethod === "actual" ? "A record of the hours you worked from home." : modeById(mode).hint}
+      </p>
 
       {mode === "wfh" ? (
-        <div className="mt-4 space-y-3">
-          <label className="flex items-center justify-between gap-3 rounded-lg border border-line bg-ink px-3 py-3 text-sm">
-            <span>{`Standard day (${formatHours(defaultHours)} hours)`}</span>
-            <input
-              type="checkbox"
-              className="size-4 accent-[var(--mint)]"
-              checked={useStandard}
-              onChange={(event) => setUseStandard(event.target.checked)}
-            />
-          </label>
-          <Field label="Hours worked from home" hint="Use tenths of an hour. 7.6 is a 7 hour 36 minute day.">
+        <div className="mt-4">
+          <Field label="Hours worked from home" hint={`A standard day is ${formatHours(defaultHours)} hours. Change that in the menu. Use tenths, up to 24.`}>
             <input
               className={inputClass}
               type="number"
@@ -125,8 +120,7 @@ export function DayLogModal({
               min={0.1}
               max={24}
               step={0.1}
-              disabled={useStandard}
-              value={useStandard ? String(defaultHours) : hours}
+              value={hours}
               onChange={(event) => setHours(event.target.value)}
             />
           </Field>

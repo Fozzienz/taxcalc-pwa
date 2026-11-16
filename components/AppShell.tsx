@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, LayoutDashboard, Receipt, ShieldCheck, Building2, Laptop } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { CalendarDays, LayoutDashboard, LogOut, Receipt, ShieldCheck, Building2, Laptop } from "lucide-react";
 import { DISCLAIMER } from "@/lib/ato-rules";
-import { visibleFinancialYears } from "@/lib/dates";
+import { visibleFinancialYears, workDaysOrDefault } from "@/lib/dates";
 import { buildSummary } from "@/lib/summary";
 import { useDisplay } from "@/hooks/useDisplay";
 import { startAccountSync, stopAccountSync, useTaxStore } from "@/hooks/useTaxStore";
 import type { YearId } from "@/lib/types";
 import { AccountModal } from "@/components/AccountModal";
+import { DeleteAccountModal } from "@/components/DeleteAccountModal";
 import { AuthScreen } from "@/components/AuthScreen";
 import { AssetManager } from "@/components/AssetManager";
 import { BackupModal } from "@/components/BackupModal";
@@ -27,7 +28,7 @@ import { signOutAccount } from "@/lib/account";
 import { getVaultKey, markPasswordRecovery, passwordRecoveryPending, recoveryHoldActive, setVaultKey, subscribeVault } from "@/lib/vaultSession";
 
 type Tab = "dashboard" | "calendar" | "expenses" | "assets" | "rentals";
-type Overlay = { type: "none" } | { type: "backup" } | { type: "menu" } | { type: "account" } | { type: "day"; date: string };
+type Overlay = { type: "none" } | { type: "backup" } | { type: "menu" } | { type: "account" } | { type: "delete" } | { type: "day"; date: string };
 
 const TABS = [
   { id: "dashboard", label: "Summary", icon: LayoutDashboard },
@@ -58,6 +59,9 @@ export function AppShell() {
     });
   }, [store]);
   const rentalsOn = store.ready && store.state.settings.rentalProperties === true;
+  const wfhMethod = store.ready && store.yearData.wfhMethod === "actual" ? "actual" : "fixed";
+  const yearWfhDays = store.ready ? Object.values(store.yearData.dayLogs).filter((log) => log.mode === "wfh").length : 0;
+  const workDays = workDaysOrDefault(store.ready ? store.state.settings.workDays : undefined);
   useEffect(() => {
     if (!rentalsOn && tab === "rentals") setTab("dashboard");
   }, [rentalsOn, tab]);
@@ -108,6 +112,9 @@ export function AppShell() {
       stopAccountSync();
     };
   }, [entered]);
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [tab]);
   if (splash !== "gone") {
     return (
       <>
@@ -142,9 +149,9 @@ export function AppShell() {
       </a>
       <header className="sticky top-0 z-40 border-b border-line bg-ink/95 backdrop-blur">
         <div className="mx-auto flex min-h-[4.5rem] w-full max-w-6xl items-center gap-3 px-4 py-2 sm:px-6">
-          <div className="min-w-0">
+          <div className="shrink-0">
             <h1 className="sr-only">Australian Tax and EOFY Calculator</h1>
-            <BrandLogo />
+            <BrandLogo className="h-9 w-auto max-w-none sm:h-12" />
           </div>
           <div className="ml-auto flex items-center gap-2">
             <label className="sr-only" htmlFor="income-year">
@@ -163,6 +170,15 @@ export function AppShell() {
               ))}
             </select>
             <MenuButton onClick={() => setOverlay({ type: "menu" })} />
+            <button
+              type="button"
+              onClick={() => void signOutAccount()}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2.5 py-2 text-xs font-semibold text-fog transition hover:border-rose/40 hover:text-rose"
+              aria-label="Log off"
+            >
+              <LogOut className="size-3.5" />
+              <span className="hidden sm:inline">Log off</span>
+            </button>
           </div>
         </div>
         <div className="mx-auto hidden w-full max-w-6xl items-center justify-between gap-3 px-6 pb-3 sm:flex">
@@ -200,6 +216,34 @@ export function AppShell() {
       ) : null}
 
       <main id="content" className="mx-auto mt-6 w-full max-w-6xl flex-1 px-4 sm:px-6">
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-line bg-panel px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">Working from home</p>
+            <p className="mt-1 max-w-xl text-xs leading-5 text-fog">
+              {wfhMethod === "actual"
+                ? "Hours stay as a record. Claim the work share of energy, phone, internet, and stationery instead of 70 cents an hour."
+                : "Hours on the calendar use the 70 cent rate. Energy, phone, internet, and stationery stay out of the claim."}
+            </p>
+          </div>
+          <div className="grid w-full grid-cols-2 gap-1 rounded-lg border border-line bg-ink p-1 sm:w-72 sm:shrink-0" role="group" aria-label="Working from home method">
+            {(
+              [
+                ["fixed", "Fixed rate"],
+                ["actual", "Actual costs"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={wfhMethod === value}
+                className={wfhMethod === value ? "focus-ring w-full rounded-md bg-mint px-3 py-2 text-center text-sm font-semibold text-ink" : "focus-ring w-full rounded-md px-3 py-2 text-center text-sm font-semibold text-fog"}
+                onClick={() => store.ready && store.setWfhMethod(store.year.id, value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         {tab === "dashboard" ? (
           <Dashboard
             year={store.year}
@@ -223,12 +267,13 @@ export function AppShell() {
           />
         ) : null}
         {tab === "calendar" ? (
-          <CalendarView year={store.year} logs={logs} expenses={expenses} onOpenDay={(date) => setOverlay({ type: "day", date })} />
+          <CalendarView year={store.year} logs={logs} expenses={expenses} wfhMethod={wfhMethod} workDays={workDays} onOpenDay={(date) => setOverlay({ type: "day", date })} />
         ) : null}
         {tab === "expenses" ? (
           <ExpenseManager
             key={`${store.year.id}:${formToken}`}
             year={store.year}
+            wfhMethod={wfhMethod}
             expenses={expenses}
             draftDate={draftDate}
             editingId={editingId}
@@ -286,17 +331,21 @@ export function AppShell() {
           onClose={() => setOverlay({ type: "none" })}
           onBackup={() => setOverlay({ type: "backup" })}
           onAccount={() => setOverlay({ type: "account" })}
-          onLogOff={() => {
-            void signOutAccount();
-            setOverlay({ type: "none" });
-          }}
+          onDeleteAccount={() => setOverlay({ type: "delete" })}
           rentalsEnabled={rentalsOn}
           onRentals={store.setRentalProperties}
+          standardHours={store.state.settings.defaultWfhHours}
+          yearLabel={store.year.label}
+          yearWfhDays={yearWfhDays}
+          onStandardHours={(hours, scope) => store.setStandardHours(store.year.id, hours, scope)}
+          workDays={workDays}
+          onWorkDays={store.setWorkDays}
         />
       ) : null}
       {overlay.type === "account" ? (
         <AccountModal onClose={() => setOverlay({ type: "none" })} />
       ) : null}
+      {overlay.type === "delete" ? <DeleteAccountModal onClose={() => setOverlay({ type: "none" })} /> : null}
       {overlay.type === "backup" ? (
         <BackupModal
           state={store.state}
@@ -308,7 +357,6 @@ export function AppShell() {
             store.reset();
             setOverlay({ type: "none" });
           }}
-          onDefaultHours={store.setDefaultHours}
           onDismissNotice={store.dismissNotice}
         />
       ) : null}
@@ -319,6 +367,8 @@ export function AppShell() {
           existing={logs[overlay.date]}
           expenses={expenses.filter((expense) => expense.date === overlay.date)}
           defaultHours={store.state.settings.defaultWfhHours}
+          wfhMethod={wfhMethod}
+          workDays={workDays}
           onClose={() => setOverlay({ type: "none" })}
           onSave={(log) => {
             store.saveDay(store.year.id, log);

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { DISCLAIMER, FIXED_RATE_INCLUDES, type FinancialYear } from "@/lib/ato-rules";
 import { daysLeftInYear, formatMediumDate, formatPeriod, yearStatus } from "@/lib/dates";
-import { formatCents, formatHours, formatWholeDollars, toCents } from "@/lib/money";
+import { formatCents, formatHours, formatWholeDollars, toCents, wholeDollarsFromCents } from "@/lib/money";
 import type { SummaryModel } from "@/lib/summary";
 import { modeById, type DayLog, type DepreciatingAsset, type Expense, type RentalExpense, type RentalProperty } from "@/lib/types";
 import { ReportActions } from "@/components/ReportActions";
@@ -34,8 +34,9 @@ export function Dashboard({
   const figures = summary.figures;
   const status = yearStatus(year);
   const remaining = daysLeftInYear(year);
+  const homeCents = summary.wfhMethod === "actual" ? figures.runningCents : figures.wfhCents;
   const maxCents = Math.max(
-    figures.wfhCents,
+    homeCents,
     figures.clothing.cents,
     figures.laundry.cents,
     figures.donations.cents,
@@ -48,7 +49,7 @@ export function Dashboard({
     1,
   );
   const rows = [
-    ["Working from home", figures.wfhCents],
+    ["Working from home", homeCents],
     ["Clothing / uniforms", figures.clothing.cents],
     ["Laundry", figures.laundry.cents],
     ["Donations", figures.donations.cents],
@@ -89,8 +90,12 @@ export function Dashboard({
         <div className="grid gap-4 sm:grid-cols-3">
           <Stat
             label="Working from home"
-            value={formatWholeDollars(figures.wfhDollars)}
-            detail={`${formatHours(figures.wfhHours)} h × ${formatCents(year.wfhCentsPerHour)} = ${formatCents(figures.wfhCents)}`}
+            value={formatWholeDollars(summary.wfhMethod === "actual" ? wholeDollarsFromCents(figures.runningCents) : figures.wfhDollars)}
+            detail={
+              summary.wfhMethod === "actual"
+                ? `${formatHours(figures.wfhHours)} h recorded · ${formatCents(figures.runningCents)} from bills`
+                : `${formatHours(figures.wfhHours)} h × ${formatCents(year.wfhCentsPerHour)} = ${formatCents(figures.wfhCents)}`
+            }
           />
           <Stat
             label="Receipts logged"
@@ -129,13 +134,21 @@ export function Dashboard({
         <SummaryCard year={year} logs={logs} expenses={expenses} summary={summary} rentals={rentals} assets={assets} />
         <div className="space-y-4">
           <Panel>
-            <h3 className="font-semibold">Already inside the 70 cent rate</h3>
-            <ul className="mt-3 space-y-2 text-sm text-fog">
-              {FIXED_RATE_INCLUDES.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-            <p className="mt-3 text-xs leading-5 text-fog">Do not also enter these as separate expenses.</p>
+            <h3 className="font-semibold">{summary.wfhMethod === "actual" ? "Actual running costs" : "Already inside the 70 cent rate"}</h3>
+            {summary.wfhMethod === "actual" ? (
+              <p className="mt-3 text-sm leading-6 text-fog">
+                Enter electricity and gas, phone, internet, and stationery on Expenses, with the work share of each bill. The calendar hours stay as the record. Rent, mortgage interest, and council rates on your own home are not part of this.
+              </p>
+            ) : (
+              <>
+                <ul className="mt-3 space-y-2 text-sm text-fog">
+                  {FIXED_RATE_INCLUDES.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs leading-5 text-fog">Do not also enter these as separate expenses.</p>
+              </>
+            )}
           </Panel>
           <Panel>
             <h3 className="font-semibold">Latest entries</h3>
@@ -184,7 +197,11 @@ export function Dashboard({
         <h3 className="font-semibold">Before you lodge</h3>
         <ul className="mt-3 space-y-2 text-sm leading-6 text-fog">
           <li>Keep this diary for the whole income year. The ATO does not accept an estimate of your hours.</li>
-          <li>Keep at least one bill or receipt for each running expense the 70 cent rate covers.</li>
+          <li>
+            {summary.wfhMethod === "actual"
+              ? "Keep the bill for each running cost, and a note of how you set the work share."
+              : "Keep at least one bill or receipt for each running expense the 70 cent rate covers."}
+          </li>
           <li>
             {figures.workExpensesNeedEvidence
               ? "Work-related expenses are over $300, so written evidence is required."
@@ -194,8 +211,17 @@ export function Dashboard({
         </ul>
         <p className="mt-4 text-xs leading-5 text-fog">
           {DISCLAIMER}{" "}
-          <a className="text-mint underline decoration-mint/40 underline-offset-2" href="https://www.ato.gov.au/individuals-and-families/income-deductions-offsets-and-records/deductions-you-can-claim/work-related-deductions/working-from-home-expenses/fixed-rate-method" target="_blank" rel="noopener noreferrer">
-            ATO fixed rate method
+          <a
+            className="text-mint underline decoration-mint/40 underline-offset-2"
+            href={
+              summary.wfhMethod === "actual"
+                ? "https://www.ato.gov.au/individuals-and-families/income-deductions-offsets-and-records/deductions-you-can-claim/work-related-deductions/working-from-home-expenses/actual-cost-method"
+                : "https://www.ato.gov.au/individuals-and-families/income-deductions-offsets-and-records/deductions-you-can-claim/work-related-deductions/working-from-home-expenses/fixed-rate-method"
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {summary.wfhMethod === "actual" ? "ATO actual cost method" : "ATO fixed rate method"}
           </a>
           {" · "}
           <a className="text-mint underline decoration-mint/40 underline-offset-2" href="https://www.qld.gov.au/recreation/travel/holidays/public" target="_blank" rel="noopener noreferrer">

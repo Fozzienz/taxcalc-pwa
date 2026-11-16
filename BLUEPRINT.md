@@ -25,4 +25,5 @@ What is in the app, and what is waiting. This is a working list, not a promise o
 - Site URL `https://taxcalc-pwa.vercel.app`
 - Redirect URLs include `http://localhost:3001` and `https://taxcalc-pwa.vercel.app`
 - Tables `profiles`, `encrypted_records`, `encrypted_receipts`, with row level security.
+- Delete account uses `public.delete_own_account()`. Run `supabase/delete_own_account.sql` once in the SQL editor. It removes the signed-in user, and the three tables follow.
 - A password-reset link must land on one of those addresses. If it does not, add that full address under Authentication → URL Configuration.

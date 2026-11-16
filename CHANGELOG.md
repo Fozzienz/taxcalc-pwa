@@ -4,6 +4,29 @@ What’s new in TaxTrack. Plain language only.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-16
+
+### Added
+
+- Choose fixed rate or actual costs for each income year.
+- A standard day is set in the menu. One field changes a single day.
+- Log off sits beside the menu.
+
+### Changed
+
+- Expenses opens at the top of the page.
+- The menu folds display, the standard day, and features into sections.
+- Help explains the fixed rate and how a bill becomes an actual-cost claim.
+- Help lists each topic in a sidebar that jumps to that section.
+- A blank weekday reads as office. Not working marks time between jobs.
+- The working-from-home switch is an even pair of buttons.
+- The logo keeps its shape beside log off.
+- Usual working days are set in the menu. Other days are shaded.
+- A rental bill saves without a description. The category name is used.
+- Adding a record shows a short confirmation. Required fields have a star.
+- Log off stays on the dashboard and leaves the menu.
+- Delete account and data removes the sign-in and encrypted records.
+
 ## [0.3.0] - 2026-11-15
 
 ### Changed

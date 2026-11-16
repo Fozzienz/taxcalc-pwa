@@ -161,7 +161,7 @@ export function TaxTrackReportDocument({
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Work from home — fixed rate</Text>
+          <Text style={styles.sectionTitle}>{report.wfhMethodLabel === "Actual costs" ? "Work from home — actual costs" : "Work from home — fixed rate"}</Text>
           <View style={[styles.row, styles.head]} wrap={false}>
             {["Date", "Mode", "Hours", "Counts", "Notes"].map((cell, index) => (
               <Text key={cell} style={[styles.cell, styles.headerCell, { width: index === 4 ? "34%" : index === 1 ? "22%" : "14%" }]}>

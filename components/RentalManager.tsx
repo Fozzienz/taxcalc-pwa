@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Building2 } from "lucide-react";
 import type { FinancialYear } from "@/lib/ato-rules";
+import { isRealIsoDate, isWithin } from "@/lib/dates";
 import { formatCents, toCents } from "@/lib/money";
 import { RENTAL_EXPENSE_CATEGORIES, RENTAL_INCOME_CATEGORIES, rentalCategoryById, type RentalCategory, type RentalExpense, type RentalProperty } from "@/lib/types";
 import { buttonClass, cx, Field, inputClass, Modal, Panel } from "@/components/ui";
@@ -42,6 +43,8 @@ export function RentalManager({
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
   const selected = properties.find((property) => property.id === selectedId) ?? properties[0];
   const rows = expenses.filter((expense) => expense.propertyId === selected?.id).sort((a, b) => b.date.localeCompare(a.date));
 
@@ -77,20 +80,43 @@ export function RentalManager({
 
   function saveExpense() {
     if (!selected) return;
+    if (!isRealIsoDate(date) || !isWithin(date, year.start, year.end)) {
+      setSavedNote(null);
+      setFormError(`Choose a date inside the ${year.label} income year.`);
+      return;
+    }
     const value = Number(amount);
-    if (!description.trim() || !Number.isFinite(value) || value <= 0) return;
+    if (!Number.isFinite(value) || value <= 0 || value > 1_000_000) {
+      setSavedNote(null);
+      setFormError("Enter an amount greater than zero.");
+      return;
+    }
+    const cents = Math.round(value * 100);
+    if (Math.abs(value * 100 - cents) > 0.001) {
+      setSavedNote(null);
+      setFormError("Use dollars and cents, such as 400.00.");
+      return;
+    }
+    const title = description.trim() || rentalCategoryById(category).label;
+    if (title.length > 160) {
+      setSavedNote(null);
+      setFormError("Keep the description to 160 characters.");
+      return;
+    }
     onSave({
       id: "",
       propertyId: selected.id,
       date,
-      amount: Math.round(value * 100) / 100,
+      amount: cents / 100,
       category,
-      description: description.trim(),
+      description: title,
       notes: notes.trim(),
     });
     setAmount("");
     setDescription("");
     setNotes("");
+    setFormError(null);
+    setSavedNote(record === "income" ? "Rent added." : "Expense added.");
   }
 
   return (
@@ -238,11 +264,11 @@ export function RentalManager({
           {selected ? (
             <Panel className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Date">
-                  <input className={inputClass} type="date" min={year.start} max={year.end} value={date} onChange={(event) => setDate(event.target.value)} />
+                <Field label="Date" required>
+                  <input className={inputClass} type="date" required min={year.start} max={year.end} value={date} onChange={(event) => setDate(event.target.value)} />
                 </Field>
-                <Field label="Amount">
-                  <input className={inputClass} inputMode="decimal" value={amount} placeholder="0.00" onChange={(event) => setAmount(event.target.value)} />
+                <Field label="Amount" required>
+                  <input className={inputClass} inputMode="decimal" required value={amount} placeholder="0.00" onChange={(event) => setAmount(event.target.value)} />
                 </Field>
                 <Field label="Record">
                   <select
@@ -267,8 +293,8 @@ export function RentalManager({
                     ))}
                   </select>
                 </Field>
-                <Field label="Description">
-                  <input className={inputClass} value={description} onChange={(event) => setDescription(event.target.value)} />
+                <Field label="Description" hint="Optional. The category name is used if you leave this blank.">
+                  <input className={inputClass} maxLength={160} value={description} onChange={(event) => setDescription(event.target.value)} />
                 </Field>
               </div>
               <Field label="Notes">
@@ -306,6 +332,8 @@ export function RentalManager({
                   </button>
                 )}
               </div>
+              {formError ? <p className="text-sm text-rose">{formError}</p> : null}
+              {savedNote ? <p className="text-sm text-mint">{savedNote}</p> : null}
               <ul className="divide-y divide-line">
                 {rows.length === 0 ? <li className="py-3 text-sm text-fog">No rent or expenses for this address in {year.label}.</li> : null}
                 {rows.map((expense) => (

@@ -26,15 +26,20 @@ export function Panel({ children, className }: { children: ReactNode; className?
 export function Field({
   label,
   hint,
+  required = false,
   children,
 }: {
   label: string;
   hint?: string;
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm text-fog">{label}</span>
+      <span className="mb-1.5 block text-sm text-fog">
+        {label}
+        {required ? <span className="text-mint"> *</span> : null}
+      </span>
       {children}
       {hint ? <span className="mt-1.5 block text-xs leading-5 text-fog">{hint}</span> : null}
     </label>

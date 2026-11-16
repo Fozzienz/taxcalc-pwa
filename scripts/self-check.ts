@@ -1,7 +1,7 @@
 import { assetTreatment, yearById } from "../lib/ato-rules";
 import { backupFilename, mergeBackups, validateBackup } from "../lib/backup";
 import { calculateClaims } from "../lib/calculations";
-import { calendarCells, financialYearIdFor, isWeekend, monthsOf, visibleFinancialYears } from "../lib/dates";
+import { calendarCells, financialYearIdFor, isUsualWorkDay, isWeekend, monthsOf, visibleFinancialYears } from "../lib/dates";
 import { holidayOn } from "../lib/holidays";
 import { deductionCents, portionCents, toCents } from "../lib/money";
 import { buildSummary } from "../lib/summary";
@@ -59,6 +59,9 @@ assert(holidayOn("2026-12-24")?.partDay === true, "Christmas Eve is part-day");
 assert(holidayOn("2026-12-28")?.scope === "qld", "2026 additional Boxing Day");
 assert(isWeekend("2026-04-25") === true, "Anzac Day 2026 is a Saturday");
 assert(isWeekend("2026-04-24") === false, "24 April 2026 is a Friday");
+assert(isUsualWorkDay("2026-04-24", [1, 2, 3, 4, 5]), "Friday is a usual Monday to Friday");
+assert(!isUsualWorkDay("2026-04-25", [1, 2, 3, 4, 5]), "Saturday sits outside Monday to Friday");
+assert(isUsualWorkDay("2026-04-25", [2, 3, 4, 5, 6]), "Saturday is a usual day in a Tuesday to Saturday week");
 
 const july = calendarCells(2025, 6);
 assert(july[0] === null && july[1]?.day === 1, "1 July 2025 is a Tuesday");
@@ -103,6 +106,39 @@ assert(claims.donations.cents === 200, "only the confirmed $2 gift is claimable"
 assert(claims.tools.cents === 20000, "80% of the $250 keyboard");
 assert(claims.depreciating.length === 1 && claims.depreciating[0].description === "Office monitor", "monitor is depreciating");
 assert(claims.heldDonations.length === 1 && claims.smallDonations.length === 1, "donation holds");
+const actualHome = calculateClaims({
+  centsPerHour: 70,
+  carCentsPerKm: 88,
+  wfhMethod: "actual",
+  dayLogs: [{ date: "2025-07-14", mode: "wfh", hours: 7.6, notes: "", receiptMarker: false }],
+  expenses: [expense({ id: "phone-bill", amount: 100, category: "phone", workUsePercent: 40 })],
+});
+assert(actualHome.wfhCents === 0 && actualHome.phone.cents === 4000 && actualHome.runningCents === 4000, "actual costs use the work share of the bill");
+const actualHoursOnly = calculateClaims({
+  centsPerHour: 70,
+  carCentsPerKm: 88,
+  wfhMethod: "actual",
+  dayLogs: [{ date: "2025-07-14", mode: "wfh", hours: 7.6, notes: "", receiptMarker: false }],
+  expenses: [],
+});
+assert(actualHoursOnly.wfhHours === 7.6 && actualHoursOnly.wfhCents === 0 && actualHoursOnly.runningCents === 0, "actual costs do not turn hours into dollars");
+const gapDay = calculateClaims({
+  centsPerHour: 70,
+  carCentsPerKm: 88,
+  dayLogs: [
+    { date: "2025-07-14", mode: "wfh", hours: 7.6, notes: "", receiptMarker: false },
+    { date: "2025-07-15", mode: "not-working", hours: 0, notes: "", receiptMarker: false },
+  ],
+  expenses: [],
+});
+assert(gapDay.wfhCents === 532 && gapDay.wfhDays === 1, "a day not working adds no hours");
+const fixedHome = calculateClaims({
+  centsPerHour: 70,
+  carCentsPerKm: 88,
+  dayLogs: [{ date: "2025-07-14", mode: "wfh", hours: 7.6, notes: "", receiptMarker: false }],
+  expenses: [expense({ id: "phone-bill", amount: 100, category: "phone", workUsePercent: 40 })],
+});
+assert(fixedHome.wfhCents === 532 && fixedHome.phone.cents === 0 && fixedHome.runningHeld === 1, "the fixed rate leaves a phone bill out");
 
 const year = yearById("2025-26");
 const data: YearData = {
@@ -304,7 +340,7 @@ assert(rentalCsv.includes("=== RENTAL PROPERTIES ===") && rentalCsv.includes("12
 const rentalBook = XLSX.read(buildTaxTrackWorkbook(reportYear, rentalData, prepared, { rentals: true, properties: rentalProperties }));
 assert(rentalBook.SheetNames.includes("Rentals"), "the workbook has a rentals sheet when the feature is on");
 const kept = validateBackup({ app: "taxtrack", version: 1, activeYear: "2025-26", settings: { defaultWfhHours: 7.6 }, years: { "2025-26": { dayLogs: [], expenses: [] } } });
-assert(kept.ok && kept.data.settings.rentalProperties === false && kept.data.properties.length === 0, "an older backup without rentals still opens");
+assert(kept.ok && kept.data.settings.rentalProperties === false && kept.data.properties.length === 0 && kept.data.settings.workDays.join(",") === "1,2,3,4,5", "an older backup without rentals still opens");
 assert(kept.ok && kept.data.assets.length === 0, "an older backup without assets still opens");
 
 function sampleAsset(overrides: Partial<DepreciatingAsset> = {}): DepreciatingAsset {
@@ -386,7 +422,7 @@ assert(legacyExpense.ok && legacyExpense.data.years["2025-26"].expenses[0]?.kilo
 const changelog = parseChangelog("## [Unreleased]\n\n### Added\n\n- 2026-11-13 — Rental properties\n");
 assert(changelog.releases[0]?.version === "Unreleased" && changelog.releases[0].subsections[0]?.items[0]?.date === "2026-11-13", "the changelog keeps the date on each item");
 const published = readChangelog().releases.filter((release) => release.version !== "Unreleased");
-assert(published.some((release) => release.version === "0.3.0"), "the published changelog has the production version");
+assert(published.some((release) => release.version === "0.4.0"), "the published changelog has the production version");
 assert(
   published.every((release) => release.subsections.every((subsection) => subsection.items.every((item) => !item.date && item.text.length < 90))),
   "published changelog bullets are short and undated",

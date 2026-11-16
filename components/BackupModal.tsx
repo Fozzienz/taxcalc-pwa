@@ -11,11 +11,11 @@ import {
   type BackupFile,
 } from "@/lib/backup";
 import { installReceiptImages } from "@/lib/receiptStore";
-import { formatTimestamp, isValidHours } from "@/lib/dates";
+import { formatTimestamp } from "@/lib/dates";
 import { yearById } from "@/lib/ato-rules";
 import type { AppState } from "@/lib/types";
 import { ReportActions } from "@/components/ReportActions";
-import { buttonClass, cx, Field, inputClass, Modal } from "@/components/ui";
+import { buttonClass, cx, Modal } from "@/components/ui";
 
 export function BackupModal({
   state,
@@ -24,7 +24,6 @@ export function BackupModal({
   onMerge,
   onReplace,
   onReset,
-  onDefaultHours,
   onDismissNotice,
 }: {
   state: AppState;
@@ -33,7 +32,6 @@ export function BackupModal({
   onMerge: (file: BackupFile) => void;
   onReplace: (file: BackupFile) => void;
   onReset: () => void;
-  onDefaultHours: (hours: number) => void;
   onDismissNotice: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -42,7 +40,6 @@ export function BackupModal({
   const [ready, setReady] = useState<BackupFile | null>(null);
   const [replaceArmed, setReplaceArmed] = useState(false);
   const [resetArmed, setResetArmed] = useState(false);
-  const [hours, setHours] = useState(String(state.settings.defaultWfhHours));
   const counts = describeBackup(stateToBackup(state));
 
   async function exportData() {
@@ -101,17 +98,6 @@ export function BackupModal({
     } catch {
       setErrors(["The receipt files in that file could not be stored in this browser."]);
     }
-  }
-
-  function saveHours() {
-    const parsed = Number(hours);
-    if (!isValidHours(parsed) || parsed <= 0) {
-      setErrors(["Use a standard day from 0.1 to 24 hours, in tenths. 7.6 is the usual full day."]);
-      return;
-    }
-    onDefaultHours(parsed);
-    setErrors([]);
-    setStatus("Standard day updated. Days you already saved stay as they are.");
   }
 
   const incoming = ready ? describeBackup(ready) : null;
@@ -204,17 +190,6 @@ export function BackupModal({
             )}
           </div>
         ) : null}
-      </div>
-
-      <div className="mt-4">
-        <Field label="Standard working-from-home day" hint="Used the next time you turn on the standard-day switch.">
-          <div className="flex gap-2">
-            <input className={inputClass} type="number" min={0.1} max={24} step={0.1} value={hours} onChange={(event) => setHours(event.target.value)} />
-            <button type="button" className={buttonClass.ghost} onClick={saveHours}>
-              Save
-            </button>
-          </div>
-        </Field>
       </div>
 
       {errors.length > 0 ? (
