@@ -98,7 +98,7 @@ export function AssetManager({
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel>
         <div className="flex items-start gap-3">
-          <Laptop className="mt-0.5 text-mint" size={18} aria-hidden />
+          <Laptop className="mt-0.5 text-rose-700 dark:text-rose-300" size={18} aria-hidden />
           <div>
             <h2 className="text-lg font-semibold tracking-tight">Depreciating assets</h2>
             <p className="mt-1 text-sm leading-6 text-fog">

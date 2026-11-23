@@ -53,7 +53,9 @@ html {
 
 body {
   margin: 0;
-  background: var(--ink);
+  background:
+    radial-gradient(1200px 520px at 50% -220px, color-mix(in srgb, var(--mint) 16%, transparent), transparent 70%),
+    var(--ink);
   color: var(--paper);
   font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -118,9 +120,30 @@ html.dark .brand-logo-dark {
 }
 
 .panel {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--paper) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 88%, var(--paper));
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--paper) 5%, transparent),
+    0 18px 40px -28px color-mix(in srgb, var(--paper) 55%, transparent);
+}
+
+main[data-section="dashboard"] { --section: #0284c7; }
+main[data-section="calendar"] { --section: #059669; }
+main[data-section="expenses"] { --section: #d97706; }
+main[data-section="assets"] { --section: #e11d48; }
+main[data-section="rentals"] { --section: #7c3aed; }
+
+html.dark main[data-section="dashboard"] { --section: #38bdf8; }
+html.dark main[data-section="calendar"] { --section: #34d399; }
+html.dark main[data-section="expenses"] { --section: #fcd34d; }
+html.dark main[data-section="assets"] { --section: #fda4af; }
+html.dark main[data-section="rentals"] { --section: #c4b5fd; }
+
+main[data-section] .panel {
+  border-color: color-mix(in srgb, var(--section) 50%, var(--line));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--section) 28%, transparent),
+    0 0 24px color-mix(in srgb, var(--section) 34%, transparent);
 }
 
 .pb-safe {
@@ -199,6 +222,29 @@ html.dark .brand-logo-dark {
   to {
     opacity: 0;
   }
+}
+
+.taxtrack-changelog-bell-unread {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--mint) 32%, transparent),
+    0 0 10px color-mix(in srgb, var(--mint) 18%, transparent);
+}
+
+@keyframes taxtrack-changelog-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.88;
+    transform: scale(1.12);
+  }
+}
+
+.taxtrack-changelog-dot {
+  animation: taxtrack-changelog-dot-pulse 2.6s ease-in-out infinite;
+  transform-origin: center;
 }
 
 @media (prefers-reduced-motion: reduce) {

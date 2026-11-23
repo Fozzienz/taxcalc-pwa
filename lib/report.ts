@@ -1,4 +1,4 @@
-import { assetTreatment, DISCLAIMER, type FinancialYear } from "@/lib/ato-rules";
+import { assetTreatment, EXPORT_DISCLAIMER, type FinancialYear } from "@/lib/ato-rules";
 import { expenseClaimCents } from "@/lib/calculations";
 import { carClaims } from "@/lib/car";
 import { formatPeriod, formatTimestamp } from "@/lib/dates";
@@ -153,7 +153,7 @@ export function buildYearReport(
       notes: expense.notes,
     })),
     exclusions: summary.exclusionRows.length > 0 ? summary.exclusionRows : ["Nothing is held out of the estimate."],
-    footnotes: [...summary.footnotes, DISCLAIMER],
+    footnotes: [...summary.footnotes, EXPORT_DISCLAIMER],
     rentalRows: options.rentals
       ? [...(data.rentalExpenses ?? [])]
           .sort((a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description))

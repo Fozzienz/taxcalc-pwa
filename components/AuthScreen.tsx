@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { KeyRound } from "lucide-react";
 import { DISCLAIMER } from "@/lib/ato-rules";
 import {
@@ -16,6 +17,7 @@ import { unlockVaultWithPassword } from "@/lib/crypto/vaultCrypto";
 import { supabase, supabaseConfigured } from "@/lib/supabase/client";
 import { clearPasswordRecovery, getVaultKey, passwordRecoveryPending, recoveryHoldActive, setRecoveryHold, setVaultKey, subscribeVault } from "@/lib/vaultSession";
 import { BrandLogo } from "@/components/BrandLogo";
+import { LegalLinks } from "@/components/LegalLinks";
 import { buttonClass, Field, inputClass, Panel } from "@/components/ui";
 
 type Mode = "signin" | "signup" | "forgot";
@@ -31,6 +33,7 @@ export function AuthScreen() {
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +67,10 @@ export function AuthScreen() {
     }
     if (mode === "signup" && password !== confirm) {
       setError("Those passwords do not match.");
+      return;
+    }
+    if (mode === "signup" && !acceptedTerms) {
+      setError("Agree to the Terms and the Privacy Policy to create an account.");
       return;
     }
     setBusy(true);
@@ -158,6 +165,7 @@ export function AuthScreen() {
             className={mode === value ? "rounded-lg border border-mint/60 bg-mint/10 px-2 py-2 text-sm font-semibold text-mint" : "rounded-lg border border-line px-2 py-2 text-sm font-semibold text-fog"}
             onClick={() => {
               setMode(value);
+              setAcceptedTerms(false);
               setError(null);
               setNotice(null);
             }}
@@ -166,7 +174,7 @@ export function AuthScreen() {
           </button>
         ))}
       </div>
-      <p className="mt-4 text-sm leading-6 text-fog">An account is required. TaxTrack encrypts your records on this device before storing them. Signing in on another device opens the same records.</p>
+      <p className="mt-4 text-sm leading-6 text-fog">An account is required. Records are encrypted on this device before they are stored. Signing in on another device opens the same records.</p>
       <form
         className="mt-4 grid gap-3"
         onSubmit={(event) => {
@@ -187,9 +195,36 @@ export function AuthScreen() {
             <input className={inputClass} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
           </Field>
         ) : null}
+        {mode === "signup" ? (
+          <p className="rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-xs leading-5 text-paper">
+            A new sign-in password does not unlock records that are already encrypted. If you lose the password and the recovery key, TaxTrack cannot recover them.
+          </p>
+        ) : null}
+        {mode === "signup" ? (
+          <div className="flex items-start gap-3 text-sm leading-6 text-fog">
+            <input
+              id="accept-terms"
+              type="checkbox"
+              className="mt-1 size-4 accent-[var(--mint)]"
+              checked={acceptedTerms}
+              onChange={(event) => setAcceptedTerms(event.target.checked)}
+            />
+            <label htmlFor="accept-terms">
+              I agree to the{" "}
+              <Link href="/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-mint hover:underline">
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-mint hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </label>
+          </div>
+        ) : null}
         {error ? <p className="text-sm text-rose">{error}</p> : null}
         {notice ? <p className="text-sm text-fog">{notice}</p> : null}
-        <button type="submit" className={buttonClass.primary} disabled={busy}>
+        <button type="submit" className={buttonClass.primary} disabled={busy || (mode === "signup" && !acceptedTerms)}>
           {busy ? "Working" : mode === "signup" ? "Create account" : mode === "forgot" ? "Send reset email" : "Sign in"}
         </button>
       </form>
@@ -222,10 +257,13 @@ export function AuthScreen() {
           <KeyRound className="mt-0.5 text-gold" size={18} aria-hidden />
           <div>
             <h1 className="text-lg font-semibold tracking-tight">Save your recovery key</h1>
-            <p className="mt-1 text-sm leading-6 text-fog">This key is shown once. You need it if you reset the password. Store it somewhere you can still open.</p>
+            <p className="mt-1 text-sm leading-6 text-fog">This key is shown once. Store it somewhere you can still open. A password reset cannot unlock existing records without it.</p>
           </div>
         </div>
         <p className="mt-4 break-all rounded-xl border border-line bg-ink px-3 py-3 font-mono text-sm">{recoveryKey}</p>
+        <p className="mt-3 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-xs leading-5 text-paper">
+          If you lose this key and the password, the encrypted records cannot be opened. TaxTrack cannot reset them or read them.
+        </p>
         <button type="button" className={`${buttonClass.ghost} mt-3`} onClick={() => void navigator.clipboard.writeText(recoveryKey)}>
           Copy
         </button>
@@ -252,7 +290,7 @@ export function AuthScreen() {
     body = (
       <>
         <h1 className="text-lg font-semibold tracking-tight">New password</h1>
-        <p className="mt-1 text-sm leading-6 text-fog">The reset link signed you in. Enter a new password and the recovery key from when the account was created.</p>
+        <p className="mt-1 text-sm leading-6 text-fog">The reset link signed you in. It does not open existing records by itself. Enter a new password and the recovery key from when the account was created.</p>
         <form
           className="mt-4 grid gap-3"
           onSubmit={(event) => {
@@ -310,7 +348,10 @@ export function AuthScreen() {
       <div className="mt-6 w-full max-w-md">
         <Panel>{body}</Panel>
       </div>
-      <p className="mt-6 max-w-md text-center text-xs leading-5 text-fog">{DISCLAIMER}</p>
+      <div className="mt-6 w-full max-w-md text-center">
+        <p className="text-xs leading-5 text-fog">{DISCLAIMER}</p>
+        <LegalLinks className="mt-3 justify-center" />
+      </div>
     </div>
   );
 }

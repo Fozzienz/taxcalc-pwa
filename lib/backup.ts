@@ -1,4 +1,4 @@
-import { DEFAULT_WFH_HOURS, FINANCIAL_YEARS, isYearId, type FinancialYear } from "@/lib/ato-rules";
+import { DEFAULT_WFH_HOURS, FINANCIAL_YEARS, isYearId, yearById, type FinancialYear } from "@/lib/ato-rules";
 import { DEFAULT_WORK_DAYS, financialYearIdFor, isRealIsoDate, isValidHours, isWithin, normalWorkDays } from "@/lib/dates";
 import type {
   AppState,
@@ -645,11 +645,50 @@ export function validateBackup(value: unknown): ValidationResult {
   };
 }
 
-export async function downloadBackup(state: AppState): Promise<string> {
+export function backupForYear(state: AppState, yearId: YearId): BackupFile {
+  const file = stateToBackup(state, new Date().toISOString());
+  file.activeYear = yearId;
+  for (const year of FINANCIAL_YEARS) {
+    if (year.id === yearId) continue;
+    file.years[year.id] = { dayLogs: [], expenses: [], rentalExpenses: [] };
+  }
+  return file;
+}
+
+export async function downloadBackup(state: AppState, yearId: YearId = state.activeYear): Promise<string> {
   const { withReceiptImages } = await import("@/lib/receiptStore");
-  const filename = backupFilename(new Date());
-  const file = await withReceiptImages(stateToBackup(state, new Date().toISOString()));
-  const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
+  const { backupToZipBytes } = await import("@/lib/backupZip");
+  const { buildTaxTrackPdfBlob } = await import("@/lib/generateTaxTrackReport");
+  const { buildTaxTrackWorkbook } = await import("@/lib/reportWorkbook");
+  const year = yearById(yearId);
+  const source = state.years[yearId];
+  const options = {
+    rentals: state.settings.rentalProperties === true,
+    properties: state.properties ?? [],
+    assets: state.assets ?? [],
+  };
+  const data = {
+    dayLogs: source.dayLogs,
+    expenses: source.expenses,
+    rentalExpenses: options.rentals ? (source.rentalExpenses ?? []) : [],
+  };
+  const prepared = new Date();
+  const [pdfBlob, workbook] = await Promise.all([
+    buildTaxTrackPdfBlob(year, data, options),
+    Promise.resolve(buildTaxTrackWorkbook(year, data, prepared, options)),
+  ]);
+  const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+  const excelBytes = new Uint8Array(workbook.byteLength);
+  excelBytes.set(workbook);
+  const filename = backupFilename(prepared).replace(/\.json$/, `-${yearId}.zip`);
+  const file = await withReceiptImages(backupForYear(state, yearId));
+  const zipped = backupToZipBytes(file, {
+    [`taxtrack-report-${yearId}.xlsx`]: excelBytes,
+    [`taxtrack-report-${yearId}.pdf`]: pdfBytes,
+  });
+  const bytes = new Uint8Array(zipped.byteLength);
+  bytes.set(zipped);
+  const blob = new Blob([bytes], { type: "application/zip" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

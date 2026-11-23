@@ -49,11 +49,11 @@ function saveBlob(filename: string, blob: Blob) {
   URL.revokeObjectURL(url);
 }
 
-export async function downloadTaxTrackPdf(
+export async function buildTaxTrackPdfBlob(
   year: FinancialYear,
   data: YearData,
   options: { rentals?: boolean; properties?: readonly RentalProperty[]; assets?: readonly DepreciatingAsset[] } = {},
-): Promise<void> {
+): Promise<Blob> {
   const prepared = new Date();
   const report = buildYearReport(year, data, prepared, options);
   const [wordmarkDataUrl, markDataUrl] = await Promise.all([
@@ -65,10 +65,16 @@ export async function downloadTaxTrackPdf(
     import("@react-pdf/renderer"),
     import("@/components/TaxTrackReportPdf"),
   ]);
-  const blob = await pdf(
-    <TaxTrackReportDocument report={report} wordmarkDataUrl={wordmarkDataUrl} markDataUrl={markDataUrl} />,
-  ).toBlob();
-  saveBlob(`${report.filenameBase}.pdf`, blob);
+  return pdf(<TaxTrackReportDocument report={report} wordmarkDataUrl={wordmarkDataUrl} markDataUrl={markDataUrl} />).toBlob();
+}
+
+export async function downloadTaxTrackPdf(
+  year: FinancialYear,
+  data: YearData,
+  options: { rentals?: boolean; properties?: readonly RentalProperty[]; assets?: readonly DepreciatingAsset[] } = {},
+): Promise<void> {
+  const blob = await buildTaxTrackPdfBlob(year, data, options);
+  saveBlob(`taxtrack-report-${year.id}.pdf`, blob);
 }
 
 export async function downloadTaxTrackWorkbook(

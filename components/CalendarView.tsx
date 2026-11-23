@@ -57,7 +57,7 @@ export function CalendarView({
               : "Log the hours you actually worked. The fixed-rate claim uses these working-from-home days, not an estimate."}
           </p>
         </div>
-        <p className="font-mono text-sm text-mint">
+        <p className="font-mono text-sm text-emerald-700 dark:text-emerald-300">
           {formatHours(wfhTenths / 10)} h from home this month
         </p>
       </div>

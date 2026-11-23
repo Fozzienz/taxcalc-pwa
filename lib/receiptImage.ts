@@ -1,9 +1,9 @@
-/** Longest edge kept after the first pass. Receipt text stays readable at this size. */
-const FIRST_EDGE = 1600;
-const FIRST_QUALITY = 0.72;
+/** Longest edge of a stored photo. Large enough to read a receipt, small enough to sync. */
+const FIRST_EDGE = 1280;
+const FIRST_QUALITY = 0.64;
 
-/** Data-URL length cap for a compressed photo. About 280 KB of JPEG. */
-export const MAX_RECEIPT_CHARS = 380_000;
+/** Data-URL length cap for a compressed photo. About 160 KB of JPEG. */
+export const MAX_RECEIPT_CHARS = 220_000;
 
 /** Data-URL length cap for a PDF or Word invoice. About 6 MB of the original file. */
 export const MAX_DOCUMENT_CHARS = 8_000_000;
@@ -51,6 +51,17 @@ export function receiptLabel(value: string): string {
   return receiptKind(value) === "image" ? "Photo" : "Invoice";
 }
 
+export function receiptBytes(value: string): number {
+  const payload = value.slice(value.indexOf(",") + 1).replace(/\s/g, "");
+  return Math.ceil((payload.length * 3) / 4);
+}
+
+export function formatReceiptSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export async function prepareReceipt(file: File): Promise<string> {
   const kind = fileKind(file);
   if (!kind) throw new Error("Use a photo, PDF, or Word document (.doc or .docx).");
@@ -78,8 +89,8 @@ async function compressReceipt(file: File): Promise<string> {
   try {
     const attempts = [
       { edge: FIRST_EDGE, quality: FIRST_QUALITY },
-      { edge: 1400, quality: 0.64 },
-      { edge: 1200, quality: 0.58 },
+      { edge: 1100, quality: 0.58 },
+      { edge: 960, quality: 0.52 },
     ];
     for (const attempt of attempts) {
       const encoded = renderJpeg(bitmap, attempt.edge, attempt.quality);
