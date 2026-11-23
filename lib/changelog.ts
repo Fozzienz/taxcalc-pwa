@@ -77,6 +77,11 @@ export function parseChangelog(markdown: string): ParsedChangelog {
   return { intro, releases };
 }
 
+export function latestPublishedVersion(releases: readonly ChangelogRelease[]): string | null {
+  const published = releases.find((release) => release.version.toLowerCase() !== "unreleased" && release.subsections.some((subsection) => subsection.items.length > 0));
+  return published?.version ?? null;
+}
+
 export function readChangelog(): ParsedChangelog {
   return parseChangelog(readFileSync(join(process.cwd(), "CHANGELOG.md"), "utf8"));
 }

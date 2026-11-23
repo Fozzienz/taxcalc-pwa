@@ -81,7 +81,10 @@ export const FIXED_RATE_INCLUDES = [
 ] as const;
 
 export const DISCLAIMER =
-  "TaxTrack is an independent organiser for your own records. It is not a registered tax agent, it does not lodge returns, and it is not part of the Australian Taxation Office or myTax. Figures are estimates from what you enter. Check them before you lodge.";
+  "TaxTrack keeps your records. It is not a registered tax agent, it does not give tax or financial advice, and it does not lodge a return. Figures are estimates from what you enter. Check the rates and the figures with the ATO or a registered tax agent before you lodge.";
+
+export const EXPORT_DISCLAIMER =
+  "TaxTrack is a record-keeping organiser, not a registered tax agent and not the ATO. It does not give tax or financial advice and it does not lodge a return. Totals are estimates from what you entered, using the rates stored in the app for this income year. Confirm the rates, your eligibility, and these figures with the ATO or a registered tax agent before you lodge. Keep this file with your records. If the password and the recovery key are both lost, encrypted records in TaxTrack cannot be recovered.";
 
 export const CATEGORY_HINTS: Record<ExpenseCategory, string> = {
   clothing:

@@ -37,7 +37,7 @@ export function DeleteAccountModal({ onClose }: { onClose: () => void }) {
         This removes the sign-in, the encrypted records stored with the account, the receipt files, and the copy on this device. TaxTrack cannot bring any of it back.
       </p>
       <p className="mt-3 rounded-lg border border-rose/40 bg-rose/10 px-3 py-2 text-sm text-rose">
-        A JSON backup is the only copy that would remain, if you already saved one. Signing up again starts empty.
+        A zip backup is the only copy that would remain, if you already saved one. Signing up again starts empty.
       </p>
       {email ? <p className="mt-3 text-sm text-fog">Account: <span className="text-paper">{email}</span></p> : null}
       <div className="mt-4 space-y-3">

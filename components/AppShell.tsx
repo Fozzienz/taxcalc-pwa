@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { CalendarDays, LayoutDashboard, LogOut, Receipt, ShieldCheck, Building2, Laptop } from "lucide-react";
+import { LogOut, ShieldCheck } from "lucide-react";
 import { DISCLAIMER } from "@/lib/ato-rules";
 import { visibleFinancialYears, workDaysOrDefault } from "@/lib/dates";
 import { buildSummary } from "@/lib/summary";
@@ -20,24 +20,22 @@ import { Dashboard } from "@/components/Dashboard";
 import { DayLogModal } from "@/components/DayLogModal";
 import { DisplayApplier } from "@/components/DisplayApplier";
 import { ExpenseManager } from "@/components/ExpenseManager";
+import { ChangelogBell } from "@/components/ChangelogBell";
+import { LegalLinks } from "@/components/LegalLinks";
 import { MenuButton, MenuDrawer } from "@/components/MenuDrawer";
 import { RentalManager } from "@/components/RentalManager";
 import { cx } from "@/components/ui";
+import { SECTIONS, type SectionId } from "@/lib/sections";
 import { supabase, supabaseConfigured } from "@/lib/supabase/client";
 import { signOutAccount } from "@/lib/account";
 import { getVaultKey, markPasswordRecovery, passwordRecoveryPending, recoveryHoldActive, setVaultKey, subscribeVault } from "@/lib/vaultSession";
 
-type Tab = "dashboard" | "calendar" | "expenses" | "assets" | "rentals";
+type Tab = SectionId;
 type Overlay = { type: "none" } | { type: "backup" } | { type: "menu" } | { type: "account" } | { type: "delete" } | { type: "day"; date: string };
 
-const TABS = [
-  { id: "dashboard", label: "Summary", icon: LayoutDashboard },
-  { id: "calendar", label: "Calendar", icon: CalendarDays },
-  { id: "expenses", label: "Expenses", icon: Receipt },
-  { id: "assets", label: "Assets", icon: Laptop },
-] as const;
+const BASE_TABS: Tab[] = ["dashboard", "calendar", "expenses", "assets"];
 
-export function AppShell() {
+export function AppShell({ changelogVersion = null }: { changelogVersion?: string | null }) {
   const store = useTaxStore();
   const display = useDisplay();
   const [tab, setTab] = useState<Tab>("dashboard");
@@ -65,7 +63,7 @@ export function AppShell() {
   useEffect(() => {
     if (!rentalsOn && tab === "rentals") setTab("dashboard");
   }, [rentalsOn, tab]);
-  const tabs = rentalsOn ? [...TABS, { id: "rentals" as const, label: "Rentals", icon: Building2 }] : TABS;
+  const tabs: Tab[] = rentalsOn ? [...BASE_TABS, "rentals"] : BASE_TABS;
 
   useEffect(() => {
     const sync = () => {
@@ -147,19 +145,31 @@ export function AppShell() {
       <a href="#content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-mint focus:px-4 focus:py-2 focus:text-ink">
         Skip to content
       </a>
-      <header className="sticky top-0 z-40 border-b border-line bg-ink/95 backdrop-blur">
-        <div className="mx-auto flex min-h-[4.5rem] w-full max-w-6xl items-center gap-3 px-4 py-2 sm:px-6">
+      <header className="sticky top-0 z-40 border-b border-line/80 bg-ink/80 backdrop-blur-xl">
+        <div className="mx-auto flex min-h-[4.5rem] w-full max-w-6xl items-center gap-2 px-3 py-2 sm:gap-3 sm:px-6">
           <div className="shrink-0">
             <h1 className="sr-only">Australian Tax and EOFY Calculator</h1>
-            <BrandLogo className="h-9 w-auto max-w-none sm:h-12" />
+            <BrandLogo className="h-8 w-auto max-w-none sm:h-12" />
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <label className="sr-only" htmlFor="income-year">
               Income year
             </label>
             <select
               id="income-year"
-              className="min-h-10 rounded-lg border border-line bg-panel px-3 text-sm"
+              className="min-h-10 w-auto rounded-xl border border-line bg-panel px-2 text-xs shadow-sm sm:hidden"
+              value={store.year.id}
+              onChange={(event) => store.setYear(event.target.value as YearId)}
+            >
+              {visibleFinancialYears().map((year) => (
+                <option key={year.id} value={year.id}>
+                  {year.id.slice(2, 4)}–{year.id.slice(5)}
+                </option>
+              ))}
+            </select>
+            <select
+              className="hidden min-h-10 rounded-xl border border-line bg-panel px-3 text-sm shadow-sm sm:block"
+              aria-label="Income year"
               value={store.year.id}
               onChange={(event) => store.setYear(event.target.value as YearId)}
             >
@@ -169,11 +179,12 @@ export function AppShell() {
                 </option>
               ))}
             </select>
+            <ChangelogBell version={changelogVersion} />
             <MenuButton onClick={() => setOverlay({ type: "menu" })} />
             <button
               type="button"
               onClick={() => void signOutAccount()}
-              className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2.5 py-2 text-xs font-semibold text-fog transition hover:border-rose/40 hover:text-rose"
+              className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-line bg-panel px-2 py-2 text-xs font-semibold text-fog shadow-sm transition hover:border-rose/40 hover:text-rose sm:px-2.5"
               aria-label="Log off"
             >
               <LogOut className="size-3.5" />
@@ -182,21 +193,27 @@ export function AppShell() {
           </div>
         </div>
         <div className="mx-auto hidden w-full max-w-6xl items-center justify-between gap-3 px-6 pb-3 sm:flex">
-          <nav className="flex gap-1 rounded-lg border border-line bg-panel p-1" aria-label="Sections">
-            {tabs.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={cx(
-                  "focus-ring min-h-10 rounded-md px-4 text-sm font-semibold",
-                  tab === item.id ? "bg-mint text-ink" : "text-fog hover:text-paper",
-                )}
-                aria-current={tab === item.id ? "page" : undefined}
-                onClick={() => openTab(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
+          <nav className="flex gap-1 rounded-xl border border-line bg-panel/90 p-1 shadow-sm" aria-label="Sections">
+            {tabs.map((id) => {
+              const section = SECTIONS[id];
+              const Icon = section.icon;
+              const active = tab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={cx(
+                    "focus-ring inline-flex min-h-10 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition",
+                    active ? section.active : section.idle,
+                  )}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => openTab(id)}
+                >
+                  <Icon size={15} className={active ? undefined : section.iconClass} aria-hidden />
+                  {section.label}
+                </button>
+              );
+            })}
           </nav>
           <p className="flex items-center gap-1.5 text-xs text-fog">
             <ShieldCheck size={14} /> Independent of the ATO
@@ -215,8 +232,8 @@ export function AppShell() {
         </p>
       ) : null}
 
-      <main id="content" className="mx-auto mt-6 w-full max-w-6xl flex-1 px-4 sm:px-6">
-        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-line bg-panel px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <main id="content" data-section={tab} className="mx-auto mt-6 w-full max-w-6xl flex-1 px-4 sm:px-6">
+        <div className="panel mb-4 flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold">Working from home</p>
             <p className="mt-1 max-w-xl text-xs leading-5 text-fog">
@@ -299,23 +316,32 @@ export function AppShell() {
         ) : null}
       </main>
 
-      <footer className="mx-auto mt-8 w-full max-w-6xl px-4 pb-28 text-xs leading-5 text-fog sm:px-6 lg:pb-10">{DISCLAIMER}</footer>
+      <footer className="mx-auto mt-10 w-full max-w-6xl px-4 pb-28 sm:px-6 lg:pb-12">
+        <div className="rounded-2xl border border-line/80 bg-panel/70 px-4 py-3">
+          <p className="text-xs leading-5 text-fog">{DISCLAIMER}</p>
+          <LegalLinks className="mt-3" />
+        </div>
+      </footer>
 
-      <nav className="taxtrack-tabbar pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-panel/95 backdrop-blur sm:hidden" aria-label="Sections">
+      <nav className="taxtrack-tabbar pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line/80 bg-ink/90 backdrop-blur-xl sm:hidden" aria-label="Sections">
         <div className="mx-auto flex max-w-lg items-stretch justify-between gap-1 px-2">
-          {tabs.map((item) => {
-            const Icon = item.icon;
-            const active = tab === item.id;
+          {tabs.map((id) => {
+            const section = SECTIONS[id];
+            const Icon = section.icon;
+            const active = tab === id;
             return (
               <button
-                key={item.id}
+                key={id}
                 type="button"
-                className={cx("flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2", active ? "text-mint" : "text-fog")}
+                className={cx(
+                  "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl border px-1 py-1.5 transition",
+                  active ? section.active : "border-transparent text-fog",
+                )}
                 aria-current={active ? "page" : undefined}
-                onClick={() => openTab(item.id)}
+                onClick={() => openTab(id)}
               >
-                <Icon size={18} className="shrink-0" />
-                <span>{item.label}</span>
+                <Icon size={18} className={cx("shrink-0", active ? undefined : section.iconClass)} aria-hidden />
+                <span>{section.label}</span>
               </button>
             );
           })}
@@ -351,8 +377,6 @@ export function AppShell() {
           state={store.state}
           notice={store.notice}
           onClose={() => setOverlay({ type: "none" })}
-          onMerge={(file) => store.mergeIn(file)}
-          onReplace={(file) => store.replaceAll(file)}
           onReset={() => {
             store.reset();
             setOverlay({ type: "none" });

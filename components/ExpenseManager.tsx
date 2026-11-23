@@ -7,7 +7,8 @@ import { assetTreatment, CATEGORY_HINTS, type FinancialYear } from "@/lib/ato-ru
 import { carClaims, formatKilometres, vehicleName } from "@/lib/car";
 import { defaultEntryDate, isRealIsoDate, isWithin } from "@/lib/dates";
 import { createId } from "@/lib/id";
-import { prepareReceipt, receiptDownloadName, receiptKind, receiptLabel } from "@/lib/receiptImage";
+import { prepareReceipt, receiptKind, receiptLabel } from "@/lib/receiptImage";
+import { ReceiptPreview } from "@/components/ReceiptPreview";
 import { putReceipt, readCachedReceipt, subscribeReceipts } from "@/lib/receiptStore";
 import { formatCents, formatMoney, portionCents, toCents } from "@/lib/money";
 import {
@@ -20,7 +21,7 @@ import {
   type PaymentMethod,
   type WfhMethod,
 } from "@/lib/types";
-import { buttonClass, cx, Field, inputClass, Modal, Panel } from "@/components/ui";
+import { buttonClass, cx, Field, inputClass, Panel } from "@/components/ui";
 
 interface FormState {
   id: string;
@@ -124,7 +125,7 @@ export function ExpenseManager({
   const [compressing, setCompressing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const dragDepth = useRef(0);
-  const [viewing, setViewing] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<{ src: string; title: string } | null>(null);
   const storedReceipt = useReceipt(form.removeReceipt ? null : form.receiptId);
   const receiptPreview = form.pendingImage ?? storedReceipt;
 
@@ -285,7 +286,7 @@ export function ExpenseManager({
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel>
         <div className="flex items-start gap-3">
-          <Receipt className="mt-0.5 text-mint" size={18} aria-hidden />
+          <Receipt className="mt-0.5 text-amber-700 dark:text-amber-300" size={18} aria-hidden />
           <div>
             <h2 className="text-lg font-semibold tracking-tight">Receipts and expenses</h2>
             <p className="mt-1 text-sm leading-6 text-fog">
@@ -415,7 +416,7 @@ export function ExpenseManager({
             <p className="mt-1 text-xs leading-5 text-fog">Drop a photo, PDF, or Word file. It is encrypted with your records before upload, and it travels with a backup.</p>
             {dragOver ? <p className="mt-2 text-sm text-mint">Drop the file to attach it</p> : null}
             {receiptPreview ? (
-              <button type="button" className="mt-3 block text-left" onClick={() => setViewing(receiptPreview)}>
+              <button type="button" className="mt-3 block text-left" onClick={() => setViewing({ src: receiptPreview, title: form.description.trim() || "Receipt" })}>
                 <ReceiptBody src={receiptPreview} compact />
               </button>
             ) : null}
@@ -516,7 +517,7 @@ export function ExpenseManager({
                 {open && detail ? (
                   <div className="border-t border-line px-4 py-3">
                     {expense.notes ? <p className="text-sm text-fog">{expense.notes}</p> : null}
-                    {expense.receiptId ? <ReceiptThumb id={expense.receiptId} onOpen={setViewing} /> : null}
+                    {expense.receiptId ? <ReceiptThumb id={expense.receiptId} title={expense.description} onOpen={setViewing} /> : null}
                   </div>
                 ) : null}
               </Panel>
@@ -524,20 +525,16 @@ export function ExpenseManager({
           })
         )}
       </div>
-      {viewing ? (
-        <Modal title="Receipt" onClose={() => setViewing(null)} wide>
-          <ReceiptBody src={viewing} />
-        </Modal>
-      ) : null}
+      {viewing ? <ReceiptPreview src={viewing.src} title={viewing.title} onClose={() => setViewing(null)} /> : null}
     </div>
   );
 }
 
-function ReceiptThumb({ id, onOpen }: { id: string; onOpen: (src: string) => void }) {
+function ReceiptThumb({ id, title, onOpen }: { id: string; title: string; onOpen: (view: { src: string; title: string }) => void }) {
   const src = useReceipt(id);
   if (!src) return null;
   return (
-    <button type="button" className="mt-2 block text-left" onClick={() => onOpen(src)}>
+    <button type="button" className="mt-2 block text-left" onClick={() => onOpen({ src, title: title || "Receipt" })}>
       <ReceiptBody src={src} compact />
     </button>
   );
@@ -552,14 +549,7 @@ function ReceiptBody({ src, compact = false }: { src: string; compact?: boolean 
       <img src={src} alt={label} className={compact ? "h-16 rounded-md border border-line" : "max-h-[70vh] w-full rounded-lg border border-line object-contain"} />
     );
   }
-  if (kind === "pdf" && !compact) {
-    return <iframe title={label} src={src} className="h-[70vh] w-full rounded-lg border border-line bg-white" />;
-  }
-  return (
-    <a href={src} download={receiptDownloadName(src)} className="inline-flex rounded-lg border border-line px-3 py-2 text-sm font-semibold text-mint">
-      {compact ? label : `Download ${label.toLowerCase()}`}
-    </a>
-  );
+  return <span className="inline-flex rounded-lg border border-line px-3 py-2 text-sm font-semibold text-amber-700 dark:text-amber-300">{label}</span>;
 }
 
 function carPreview(kilometres: string, vehicle: string, expenses: Expense[], editingId: string, centsPerKm: number): string {

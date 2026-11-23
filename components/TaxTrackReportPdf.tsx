@@ -104,7 +104,7 @@ function Logo({ wordmarkDataUrl, markDataUrl, variant }: { wordmarkDataUrl?: str
 function ReportFooter() {
   return (
     <View style={styles.footer} fixed>
-      <Text style={styles.footerText}>TaxTrack estimates only. Not an ATO assessment and not tax advice. Check the figures before you lodge.</Text>
+      <Text style={styles.footerText}>Estimates only. Not tax advice and not an ATO assessment. Keep this copy. Check the figures before you lodge.</Text>
       <Text style={[styles.footerText, { textAlign: "right", marginTop: 3 }]} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
     </View>
   );

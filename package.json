@@ -1,8 +1,10 @@
 {
   "name": "taxcalc-pwa",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "scripts": {
+    "predev": "node -e \"require('fs').copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs','public/pdf.worker.min.mjs')\"",
+    "prebuild": "node -e \"require('fs').copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs','public/pdf.worker.min.mjs')\"",
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start",
@@ -11,8 +13,10 @@
   "dependencies": {
     "@react-pdf/renderer": "^4.6.1",
     "@supabase/supabase-js": "^2.119.0",
+    "fflate": "^0.8.3",
     "lucide-react": "^1.72.0",
     "next": "16.4.6",
+    "pdfjs-dist": "^5.4.296",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "xlsx": "^0.18.5"

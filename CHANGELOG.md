@@ -4,6 +4,23 @@ What’s new in TaxTrack. Plain language only.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-23
+
+### Added
+
+- A bell lights when a published changelog is new, and opens the changelog.
+- Terms and a privacy policy, with a sign-up warning if the recovery key is lost.
+- Each section has its own colour in the bar.
+- A zip backup includes the receipt and invoice files.
+- Assets are rose, with a glow in that same colour.
+- A chosen year's zip also holds that year's Excel and PDF.
+- The boxes glow in the colour of the section you are in.
+- Receipt photos are stored smaller and open large enough to read.
+
+### Fixed
+
+- Log off stays visible on a phone.
+
 ## [0.4.0] - 2026-11-16
 
 ### Added

@@ -309,6 +309,23 @@ export function MenuDrawer({
               ›
             </span>
           </Link>
+          <Link
+            href="/terms"
+            onClick={(event) => {
+              event.preventDefault();
+              onClose();
+              router.push("/terms");
+            }}
+            className="flex w-full items-center justify-between rounded-lg border border-line bg-ink/40 px-3 py-2.5 text-left transition hover:border-mint/40"
+          >
+            <span>
+              <span className="block text-sm font-semibold">Terms and privacy</span>
+              <span className="mt-0.5 block text-xs text-fog">The rules for the organiser, and what is stored</span>
+            </span>
+            <span className="text-mint" aria-hidden>
+              ›
+            </span>
+          </Link>
           <button
             type="button"
             onClick={onBackup}
@@ -316,7 +333,7 @@ export function MenuDrawer({
           >
             <span>
               <span className="block text-sm font-semibold">Data and backup</span>
-              <span className="mt-0.5 block text-xs text-fog">JSON backup, or an Excel or PDF report</span>
+              <span className="mt-0.5 block text-xs text-fog">A year zip, or just the Excel or PDF</span>
             </span>
             <span className="text-mint" aria-hidden>
               ›

@@ -123,7 +123,7 @@ export function RentalManager({
     <div className="space-y-4">
       <Panel>
         <div className="flex items-start gap-3">
-          <Building2 className="mt-0.5 text-mint" size={18} aria-hidden />
+          <Building2 className="mt-0.5 text-violet-700 dark:text-violet-300" size={18} aria-hidden />
           <div>
             <h2 className="text-lg font-semibold tracking-tight">Rental properties</h2>
             <p className="mt-1 text-sm leading-6 text-fog">
@@ -247,7 +247,7 @@ export function RentalManager({
                   aria-selected={active}
                   className={
                     active
-                      ? "block w-full border-b border-line bg-mint/10 px-4 py-3 text-left text-sm font-semibold leading-5 break-words text-mint last:border-b-0"
+                      ? "block w-full border-b border-line bg-[color-mix(in_srgb,var(--section)_14%,transparent)] px-4 py-3 text-left text-sm font-semibold leading-5 break-words text-[color:var(--section)] last:border-b-0"
                       : "block w-full border-b border-line px-4 py-3 text-left text-sm leading-5 break-words text-paper last:border-b-0"
                   }
                   onClick={() => {

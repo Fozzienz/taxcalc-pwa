@@ -1,5 +1,7 @@
 import { assetTreatment, yearById } from "../lib/ato-rules";
 import { backupFilename, mergeBackups, validateBackup } from "../lib/backup";
+import { unzipSync } from "fflate";
+import { backupFromZipBytes, backupToZipBytes } from "../lib/backupZip";
 import { calculateClaims } from "../lib/calculations";
 import { calendarCells, financialYearIdFor, isUsualWorkDay, isWeekend, monthsOf, visibleFinancialYears } from "../lib/dates";
 import { holidayOn } from "../lib/holidays";
@@ -7,7 +9,7 @@ import { deductionCents, portionCents, toCents } from "../lib/money";
 import { buildSummary } from "../lib/summary";
 import { buildCsvReport } from "../lib/report";
 import { buildTaxTrackWorkbook } from "../lib/reportWorkbook";
-import { parseChangelog, readChangelog } from "../lib/changelog";
+import { latestPublishedVersion, parseChangelog, readChangelog } from "../lib/changelog";
 import { summariseRentals } from "../lib/rentals";
 import { depreciationSchedule } from "../lib/depreciation";
 import { summariseCar } from "../lib/car";
@@ -243,6 +245,13 @@ const jpeg = validateBackup({
   },
 });
 assert(jpeg.ok && jpeg.data.years["2025-26"].expenses[0]?.receiptImage === "data:image/jpeg;base64,abcd", "a compressed JPEG is kept");
+if (jpeg.ok) {
+  const zipped = backupToZipBytes(jpeg.data, { "taxtrack-report-2025-26.xlsx": new Uint8Array([1, 2, 3]), "taxtrack-report-2025-26.pdf": new Uint8Array([4, 5]) });
+  const packed = unzipSync(zipped);
+  assert(packed["taxtrack-report-2025-26.xlsx"]?.length === 3 && packed["taxtrack-report-2025-26.pdf"]?.length === 2, "a year zip carries the excel and pdf");
+  const restored = validateBackup(backupFromZipBytes(zipped));
+  assert(restored.ok && restored.data.years["2025-26"].expenses[0]?.receiptImage === "data:image/jpeg;base64,abcd", "a zip backup keeps the receipt file");
+}
 const pdf = validateBackup({
   app: "taxtrack",
   version: 1,
@@ -422,7 +431,8 @@ assert(legacyExpense.ok && legacyExpense.data.years["2025-26"].expenses[0]?.kilo
 const changelog = parseChangelog("## [Unreleased]\n\n### Added\n\n- 2026-11-13 — Rental properties\n");
 assert(changelog.releases[0]?.version === "Unreleased" && changelog.releases[0].subsections[0]?.items[0]?.date === "2026-11-13", "the changelog keeps the date on each item");
 const published = readChangelog().releases.filter((release) => release.version !== "Unreleased");
-assert(published.some((release) => release.version === "0.4.0"), "the published changelog has the production version");
+assert(published.some((release) => release.version === "0.5.0"), "the published changelog has the production version");
+assert(latestPublishedVersion(published) === "0.5.0", "the bell follows the latest published changelog");
 assert(
   published.every((release) => release.subsections.every((subsection) => subsection.items.every((item) => !item.date && item.text.length < 90))),
   "published changelog bullets are short and undated",

@@ -12,11 +12,11 @@ export const inputClass =
 
 export const buttonClass = {
   primary:
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-mint px-4 text-sm font-semibold text-ink transition hover:brightness-110 focus-ring disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-mint px-4 text-sm font-semibold text-ink shadow-sm transition hover:brightness-110 focus-ring disabled:cursor-not-allowed disabled:opacity-50",
   ghost:
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-panel px-4 text-sm font-semibold text-paper transition hover:border-mint/40 focus-ring disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-panel px-4 text-sm font-semibold text-paper shadow-sm transition hover:border-mint/40 focus-ring disabled:cursor-not-allowed disabled:opacity-50",
   danger:
-    "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-rose/40 px-4 text-sm font-semibold text-rose transition hover:bg-rose/10 focus-ring",
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-rose/40 px-4 text-sm font-semibold text-rose transition hover:bg-rose/10 focus-ring",
 };
 
 export function Panel({ children, className }: { children: ReactNode; className?: string }) {

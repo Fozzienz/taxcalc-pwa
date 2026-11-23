@@ -15,8 +15,8 @@ const TOPICS: { id: string; title: string; body: string[] }[] = [
     id: "records",
     title: "Where your records live",
     body: [
-      "Sign in before the summary. TaxTrack encrypts the income years, hours, expenses, assets, rentals, and receipt files on this device, then stores only unreadable text. That is the zero-knowledge model: the server cannot read the records or the recovery key. Signing in on another device opens the same records. Log off, beside the menu, returns to the sign-in page.",
-      "Delete account and data, in the menu, asks for your password and the words DELETE MY TAXTRACK. It then removes the sign-in, the encrypted records, and the copy on this device. A JSON backup you already saved is the only copy left. This cannot be undone.",
+      "Sign in before the summary. TaxTrack encrypts the income years, hours, expenses, assets, rentals, and receipt files on this device, then stores only unreadable text. That is the zero-knowledge model: the server cannot read the records or the recovery key. Signing in on another device opens the same records. Log off, beside the menu, returns to the sign-in page. Data and backup exports a zip of one income year, with the records, the Excel workbook, the PDF, and each receipt or invoice.",
+      "Delete account and data, in the menu, asks for your password and the words DELETE MY TAXTRACK. It then removes the sign-in, the encrypted records, and the copy on this device. A zip you already saved is the only copy left. This cannot be undone.",
     ],
   },
   {
@@ -32,7 +32,7 @@ const TOPICS: { id: string; title: string; body: string[] }[] = [
   {
     id: "another-device",
     title: "Another device",
-    body: ["Sign in with the same email and password. TaxTrack opens that account's records on this device. Changes are encrypted here and stored with the account, so the next sign-in opens the latest save. Data and backup still exports a JSON file you can keep yourself."],
+    body: ["Sign in with the same email and password. TaxTrack opens that account's records on this device. Changes are encrypted here and stored with the account, so the next sign-in opens the latest save. Data and backup can also save a zip of one income year, with the Excel workbook, the PDF, and the receipts. That file is yours to keep. Signing in is how the records move to another device."],
   },
   {
     id: "working-from-home",
@@ -47,7 +47,7 @@ const TOPICS: { id: string; title: string; body: string[] }[] = [
   {
     id: "receipts",
     title: "Receipts and invoices",
-    body: ["On Expenses, attach a photo, a PDF, or a Word document (.doc or .docx). On a computer you can drop the file onto the receipt box. Photos are reduced to a readable JPEG. PDF and Word files are kept as the original file. The file is encrypted with your records before upload, and it is included in a JSON backup. Open a saved invoice from the expense to view a photo or PDF, or to download a Word document."],
+    body: ["On Expenses, attach a photo, a PDF, or a Word document (.doc or .docx). On a computer you can drop the file onto the receipt box. A photo is reduced to a smaller JPEG that still reads when you open it. PDF and Word files are kept as the original file. The file is encrypted with your records before upload. The zip backup includes it as its own file. Open a saved invoice and it fills the screen. A Word invoice downloads instead."],
   },
   {
     id: "car-kilometres",
@@ -126,6 +126,15 @@ export default function FaqPage() {
       <h1 className="mt-4 text-2xl font-semibold tracking-tight">Help and disclaimers</h1>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-fog">
         A short guide to the organiser. The rules below are the ones TaxTrack applies. They are not personal tax advice.
+      </p>
+      <p className="mt-3 text-sm font-semibold">
+        <Link href="/terms" className="text-mint hover:underline">
+          Terms
+        </Link>
+        <span className="px-2 font-normal text-fog">·</span>
+        <Link href="/privacy" className="text-mint hover:underline">
+          Privacy
+        </Link>
       </p>
       <div className="mt-8 lg:grid lg:grid-cols-[minmax(11.5rem,15rem)_1fr] lg:items-start lg:gap-8">
         <nav

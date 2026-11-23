@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ChangelogScreen } from "@/components/ChangelogScreen";
-import { readChangelog } from "@/lib/changelog";
+import { ChangelogSeen } from "@/components/ChangelogSeen";
+import { latestPublishedVersion, readChangelog } from "@/lib/changelog";
 
 export const metadata: Metadata = {
   title: "Changelog — TaxTrack",
@@ -9,5 +10,10 @@ export const metadata: Metadata = {
 
 export default function ChangelogPage() {
   const changelog = readChangelog();
-  return <ChangelogScreen releases={changelog.releases} />;
+  return (
+    <>
+      <ChangelogSeen version={latestPublishedVersion(changelog.releases)} />
+      <ChangelogScreen releases={changelog.releases} />
+    </>
+  );
 }
