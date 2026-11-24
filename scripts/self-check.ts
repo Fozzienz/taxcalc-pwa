@@ -1,6 +1,6 @@
 import { assetTreatment, yearById } from "../lib/ato-rules";
 import { backupFilename, mergeBackups, validateBackup } from "../lib/backup";
-import { unzipSync } from "fflate";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import { backupFromZipBytes, backupToZipBytes } from "../lib/backupZip";
 import { calculateClaims } from "../lib/calculations";
 import { calendarCells, financialYearIdFor, isUsualWorkDay, isWeekend, monthsOf, visibleFinancialYears } from "../lib/dates";
@@ -249,8 +249,23 @@ if (jpeg.ok) {
   const zipped = backupToZipBytes(jpeg.data, { "taxtrack-report-2025-26.xlsx": new Uint8Array([1, 2, 3]), "taxtrack-report-2025-26.pdf": new Uint8Array([4, 5]) });
   const packed = unzipSync(zipped);
   assert(packed["taxtrack-report-2025-26.xlsx"]?.length === 3 && packed["taxtrack-report-2025-26.pdf"]?.length === 2, "a year zip carries the excel and pdf");
+  const receiptName = Object.keys(packed).find((name) => name.startsWith("receipts/") && name.endsWith(".jpg"));
+  assert(Boolean(receiptName?.includes("2025-08-01") && receiptName.includes("_shot_") && receiptName.includes("12.00")), "a receipt is named with the date, description, and amount");
+  const saved = JSON.parse(new TextDecoder().decode(packed["taxtrack.json"] ?? new Uint8Array())) as {
+    years: Record<string, { expenses: Array<{ receiptId?: string; receiptFile?: string }> }>;
+  };
+  assert(saved.years["2025-26"]?.expenses[0]?.receiptFile === receiptName, "the backup records the receipt path");
   const restored = validateBackup(backupFromZipBytes(zipped));
   assert(restored.ok && restored.data.years["2025-26"].expenses[0]?.receiptImage === "data:image/jpeg;base64,abcd", "a zip backup keeps the receipt file");
+  const legacyFiles = { ...packed };
+  const legacyId = saved.years["2025-26"]?.expenses[0]?.receiptId ?? "";
+  delete legacyFiles[receiptName ?? ""];
+  legacyFiles[`receipts/${legacyId}.jpg`] = packed[receiptName ?? ""] ?? new Uint8Array();
+  const legacyJson = structuredClone(saved) as { years: Record<string, { expenses: Array<{ receiptFile?: string }> }> };
+  delete legacyJson.years["2025-26"]?.expenses[0]?.receiptFile;
+  legacyFiles["taxtrack.json"] = strToU8(JSON.stringify(legacyJson));
+  const legacyRestored = validateBackup(backupFromZipBytes(zipSync(legacyFiles)));
+  assert(legacyRestored.ok && legacyRestored.data.years["2025-26"].expenses[0]?.receiptImage === "data:image/jpeg;base64,abcd", "an older receipt filename still restores");
 }
 const pdf = validateBackup({
   app: "taxtrack",
@@ -299,19 +314,25 @@ const reportSummary = buildSummary(reportYear, reportData);
 const csv = buildCsvReport(reportYear, reportData, new Date("2026-11-13T09:00:00+10:00"));
 assert(csv.charCodeAt(0) === 0xfeff, "the spreadsheet starts with a UTF-8 BOM");
 assert(csv.includes("=== TAXTRACK ==="), "the spreadsheet names TaxTrack");
-assert(csv.includes("=== WORK FROM HOME — Fixed rate ==="), "the hours section uses a banner");
+assert(csv.includes("=== WFH MONTHLY ===") && csv.includes("=== WFH DAILY LOG ==="), "the hours section uses a banner");
 assert(csv.includes("14/07/2025,Work from home,7.6,Yes,Client work"), "the spreadsheet lists the working-from-home day");
 assert(csv.includes("15/07/2025,Office,8,No"), "an office day is listed and does not count");
 assert(csv.includes("02/08/2025,Desk chair,Officeworks,Tools / equipment,Card,80,100,80,Yes"), "a claimable expense keeps its amount");
 assert(csv.includes('03/08/2025,Monitor,,Tools / equipment,Card,450,100,0,"No - depreciating asset, not in the total"'), "a depreciating asset is excluded");
 assert(csv.includes(`Total to enter,,${reportSummary.totalDollars}`), "the spreadsheet total matches the on-screen total");
+assert(reportSummary.blocks.some((block) => block.id === "clothing" && !block.shown), "an empty clothing category stays off the summary");
+assert(reportSummary.blocks.some((block) => block.id === "wfh" && block.shown), "working from home stays when hours are logged");
+assert(!csv.includes("Laundry: $0.00"), "a zero laundry line stays out of the spreadsheet summary");
+assert(csv.includes("Nothing entered for"), "the spreadsheet names the empty categories");
 assert(reportSummary.totalDollars === 85, "7.6 hours and an $80 chair enter as $85");
 const prepared = new Date("2026-11-13T09:00:00+10:00");
 const workbook = XLSX.read(buildTaxTrackWorkbook(reportYear, reportData, prepared));
-assert(workbook.SheetNames.join("|") === "Summary|WFH hours|Expenses|Held out", "the workbook has the TaxTrack sheets");
+assert(workbook.SheetNames.join("|") === "Summary|WFH Monthly|WFH Daily Log|Expenses|Held out", "the workbook has the TaxTrack sheets");
 const summarySheet = XLSX.utils.sheet_to_csv(workbook.Sheets.Summary);
 const expenseSheet = XLSX.utils.sheet_to_csv(workbook.Sheets.Expenses);
 assert(summarySheet.includes("TaxTrack") && summarySheet.includes(String(reportSummary.totalDollars)), "the workbook summary names TaxTrack and matches the total");
+assert(summarySheet.includes("Nothing entered"), "the workbook names the empty categories");
+assert(!summarySheet.includes('"Clothing, laundry and dry-cleaning",0'), "the workbook summary leaves out a zero category");
 assert(expenseSheet.includes("Desk chair") && expenseSheet.includes("Monitor"), "the workbook lists both expenses");
 const longReport: YearData = {
   dayLogs: reportData.dayLogs,
@@ -381,8 +402,8 @@ assert(half[0]?.claimCents === 25000 && half[0]?.closingCents === 150000, "work 
 const declineSummary = buildSummary(reportYear, { dayLogs: {}, expenses: [] }, { assets: [sampleAsset()] });
 assert(declineSummary.totalDollars === 500 && declineSummary.blocks.some((block) => block.id === "decline"), "a full-year prime-cost asset adds $500");
 const declineBook = XLSX.read(buildTaxTrackWorkbook(reportYear, { dayLogs: {}, expenses: [] }, prepared, { assets: [sampleAsset()] }));
-assert(declineBook.SheetNames.includes("Decline in value"), "the workbook has a decline sheet when assets exist");
-assert(!workbook.SheetNames.includes("Decline in value"), "the workbook omits the decline sheet when there are no assets");
+assert(declineBook.SheetNames.includes("Assets & Depreciation"), "the workbook has a decline sheet when assets exist");
+assert(!workbook.SheetNames.includes("Assets & Depreciation"), "the workbook omits the decline sheet when there are no assets");
 const declineCsv = buildCsvReport(reportYear, { dayLogs: {}, expenses: [] }, prepared, { assets: [sampleAsset()] });
 assert(declineCsv.includes("=== DECLINE IN VALUE ===") && declineCsv.includes("Laptop"), "the spreadsheet lists the asset");
 
@@ -431,8 +452,8 @@ assert(legacyExpense.ok && legacyExpense.data.years["2025-26"].expenses[0]?.kilo
 const changelog = parseChangelog("## [Unreleased]\n\n### Added\n\n- 2026-11-13 — Rental properties\n");
 assert(changelog.releases[0]?.version === "Unreleased" && changelog.releases[0].subsections[0]?.items[0]?.date === "2026-11-13", "the changelog keeps the date on each item");
 const published = readChangelog().releases.filter((release) => release.version !== "Unreleased");
-assert(published.some((release) => release.version === "0.5.0"), "the published changelog has the production version");
-assert(latestPublishedVersion(published) === "0.5.0", "the bell follows the latest published changelog");
+assert(published.some((release) => release.version === "0.6.0"), "the published changelog has the production version");
+assert(latestPublishedVersion(published) === "0.6.0", "the bell follows the latest published changelog");
 assert(
   published.every((release) => release.subsections.every((subsection) => subsection.items.every((item) => !item.date && item.text.length < 90))),
   "published changelog bullets are short and undated",

@@ -86,7 +86,7 @@ export function BackupModal({
 
       <div className="mt-4 rounded-2xl border border-line p-3">
         <p className="text-sm font-medium">Accountant report for {year.label}</p>
-        <p className="mt-1 text-xs leading-5 text-fog">Excel downloads a workbook. The PDF is the printout, with the TaxTrack name and logo. The zip includes both.</p>
+        <p className="mt-1 text-xs leading-5 text-fog">Excel downloads a workbook. The PDF is the printout. The zip keeps both, including the daily log.</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <ReportActions
             year={year}

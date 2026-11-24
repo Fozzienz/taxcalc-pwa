@@ -4,6 +4,19 @@ What’s new in TaxTrack. Plain language only.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-24
+
+### Changed
+
+- The summary hides a category with nothing to enter.
+- A switch shows the categories with nothing to enter.
+- Excel and PDF leave that zero category out of the summary.
+- The PDF leads with a monthly working-from-home table.
+- The zip names each receipt with the date, supplier, and amount.
+- A switch can leave the daily log out of the PDF. The zip keeps it.
+- Car trips sit on their own mileage sheet.
+- The summary points to the menu for Excel, the PDF, and the zip.
+
 ## [0.5.0] - 2026-11-23
 
 ### Added

@@ -101,6 +101,40 @@ function Logo({ wordmarkDataUrl, markDataUrl, variant }: { wordmarkDataUrl?: str
   );
 }
 
+function DailyLog({ report }: { report: YearReport }) {
+  const rows = report.hourRows.filter((row) => row.mode === "Work from home" && row.hours > 0);
+  const noted = rows.filter((row) => row.notes);
+  const cells = [...rows];
+  while (cells.length % 3 !== 0) cells.push({ date: "", mode: "", hours: 0, counts: "", notes: "" });
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Daily working-from-home log</Text>
+      {rows.length === 0 ? (
+        <Text style={styles.note}>No working-from-home hours logged.</Text>
+      ) : (
+        cells.reduce<typeof cells[]>((groups, cell, index) => {
+          if (index % 3 === 0) groups.push([]);
+          groups[groups.length - 1]?.push(cell);
+          return groups;
+        }, []).map((group, index) => (
+          <View key={index} style={styles.row} wrap={false}>
+            {group.map((cell, cellIndex) => (
+              <Text key={cellIndex} style={[styles.cell, { width: "33%" }]}>
+                {cell.date ? `${cell.date}  ${cell.hours} h` : ""}
+              </Text>
+            ))}
+          </View>
+        ))
+      )}
+      {noted.map((row) => (
+        <Text key={`${row.date}-${row.notes}`} style={styles.note}>
+          {row.date}: {row.notes}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 function ReportFooter() {
   return (
     <View style={styles.footer} fixed>
@@ -114,10 +148,12 @@ export function TaxTrackReportDocument({
   report,
   wordmarkDataUrl,
   markDataUrl,
+  includeDailyLog = true,
 }: {
   report: YearReport;
   wordmarkDataUrl?: string | null;
   markDataUrl?: string | null;
+  includeDailyLog?: boolean;
 }) {
   const disclaimer = report.footnotes[report.footnotes.length - 1] ?? "";
 
@@ -156,29 +192,29 @@ export function TaxTrackReportDocument({
               <Text style={[styles.cell, styles.right, { width: "38%" }]}>{row.enter}</Text>
             </View>
           ))}
+          {report.emptyNote ? <Text style={styles.note}>{report.emptyNote}</Text> : null}
           <Text style={styles.total}>Total to enter {report.totalEnter}</Text>
           <Text style={styles.note}>{report.hourNote}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{report.wfhMethodLabel === "Actual costs" ? "Work from home — actual costs" : "Work from home — fixed rate"}</Text>
+          <Text style={styles.sectionTitle}>Working from home by month</Text>
           <View style={[styles.row, styles.head]} wrap={false}>
-            {["Date", "Mode", "Hours", "Counts", "Notes"].map((cell, index) => (
-              <Text key={cell} style={[styles.cell, styles.headerCell, { width: index === 4 ? "34%" : index === 1 ? "22%" : "14%" }]}>
+            {["Month", "Days", "Hours", report.wfhMethodLabel === "Actual costs" ? "" : "Exact"].filter(Boolean).map((cell) => (
+              <Text key={cell} style={[styles.cell, styles.headerCell, { width: report.wfhMethodLabel === "Actual costs" ? "33%" : "25%" }]}>
                 {cell}
               </Text>
             ))}
           </View>
-          {report.hourRows.length === 0 ? (
-            <Text style={styles.note}>No days logged.</Text>
+          {report.monthRows.length === 0 ? (
+            <Text style={styles.note}>No working-from-home hours logged.</Text>
           ) : (
-            report.hourRows.map((row) => (
-              <View key={`${row.date}-${row.mode}`} style={styles.row} wrap={false}>
-                <Text style={[styles.cell, { width: "14%" }]}>{row.date}</Text>
-                <Text style={[styles.cell, { width: "22%" }]}>{row.mode}</Text>
-                <Text style={[styles.cell, { width: "14%" }]}>{row.hours}</Text>
-                <Text style={[styles.cell, { width: "16%" }]}>{row.counts}</Text>
-                <Text style={[styles.cell, { width: "34%" }]}>{row.notes || "—"}</Text>
+            report.monthRows.map((row) => (
+              <View key={row.month} style={styles.row} wrap={false}>
+                <Text style={[styles.cell, { width: report.wfhMethodLabel === "Actual costs" ? "34%" : "25%" }]}>{row.month}</Text>
+                <Text style={[styles.cell, { width: report.wfhMethodLabel === "Actual costs" ? "33%" : "25%" }]}>{row.days}</Text>
+                <Text style={[styles.cell, { width: report.wfhMethodLabel === "Actual costs" ? "33%" : "25%" }]}>{row.hours}</Text>
+                {report.wfhMethodLabel === "Actual costs" ? null : <Text style={[styles.cell, styles.right, { width: "25%" }]}>{row.exactLabel}</Text>}
               </View>
             ))
           )}
@@ -187,11 +223,12 @@ export function TaxTrackReportDocument({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Expenses</Text>
           <View style={[styles.row, styles.head]} wrap={false}>
-            <Text style={[styles.cell, styles.headerCell, { flex: 1.2 }]}>Date</Text>
-            <Text style={[styles.cell, styles.headerCell, { flex: 2.1 }]}>Description</Text>
-            <Text style={[styles.cell, styles.headerCell, { flex: 1.8 }]}>Category</Text>
-            <Text style={[styles.cell, styles.headerCell, styles.right, { flex: 1.1 }]}>Amount</Text>
-            <Text style={[styles.cell, styles.headerCell, styles.right, { flex: 1.1 }]}>Claim</Text>
+            <Text style={[styles.cell, styles.headerCell, { flex: 1.1 }]}>Date</Text>
+            <Text style={[styles.cell, styles.headerCell, { flex: 2.2 }]}>Item</Text>
+            <Text style={[styles.cell, styles.headerCell, styles.right, { flex: 1 }]}>Cost</Text>
+            <Text style={[styles.cell, styles.headerCell, styles.right, { flex: 0.6 }]}>%</Text>
+            <Text style={[styles.cell, styles.headerCell, styles.right, { flex: 1 }]}>Claim</Text>
+            <Text style={[styles.cell, styles.headerCell, { flex: 1.1 }]}>Receipt</Text>
           </View>
           {report.expenseRows.length === 0 ? (
             <Text style={styles.note}>No expenses logged.</Text>
@@ -199,11 +236,12 @@ export function TaxTrackReportDocument({
             report.expenseRows.map((row, index) => (
               <View key={`${row.date}-${row.description}-${index}`} wrap={false}>
                 <View style={styles.row}>
-                  <Text style={[styles.cell, { flex: 1.2 }]}>{row.date}</Text>
-                  <Text style={[styles.cell, { flex: 2.1 }]}>{row.description}</Text>
-                  <Text style={[styles.cell, { flex: 1.8 }]}>{row.category}</Text>
-                  <Text style={[styles.cell, styles.right, { flex: 1.1 }]}>{row.amountLabel}</Text>
-                  <Text style={[styles.cell, styles.right, { flex: 1.1 }]}>{row.claimLabel}</Text>
+                  <Text style={[styles.cell, { flex: 1.1 }]}>{row.date}</Text>
+                  <Text style={[styles.cell, { flex: 2.2 }]}>{row.description}</Text>
+                  <Text style={[styles.cell, styles.right, { flex: 1 }]}>{row.amountLabel}</Text>
+                  <Text style={[styles.cell, styles.right, { flex: 0.6 }]}>{row.workUse}</Text>
+                  <Text style={[styles.cell, styles.right, { flex: 1 }]}>{row.claimLabel}</Text>
+                  <Text style={[styles.cell, { flex: 1.1 }]}>{row.receiptStatus === "Covered by the fixed rate" ? "In the rate" : row.receiptStatus}</Text>
                 </View>
                 {row.included !== "Yes" || row.merchant || row.notes ? (
                   <Text style={[styles.note, { marginTop: 0, marginBottom: 2 }]}>
@@ -215,9 +253,29 @@ export function TaxTrackReportDocument({
           )}
         </View>
 
+        {report.mileageRows.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Mileage</Text>
+            <View style={[styles.row, styles.head]} wrap={false}>
+              <Text style={[styles.cell, styles.headerCell, { flex: 1.2 }]}>Date</Text>
+              <Text style={[styles.cell, styles.headerCell, { flex: 2.4 }]}>Purpose</Text>
+              <Text style={[styles.cell, styles.headerCell, styles.right, { flex: 1 }]}>Km</Text>
+              <Text style={[styles.cell, styles.headerCell, styles.right, { flex: 1.2 }]}>Claim</Text>
+            </View>
+            {report.mileageRows.map((row, index) => (
+              <View key={`${row.date}-${row.purpose}-${index}`} style={styles.row} wrap={false}>
+                <Text style={[styles.cell, { flex: 1.2 }]}>{row.date}</Text>
+                <Text style={[styles.cell, { flex: 2.4 }]}>{row.purpose}</Text>
+                <Text style={[styles.cell, styles.right, { flex: 1 }]}>{row.kilometres}</Text>
+                <Text style={[styles.cell, styles.right, { flex: 1.2 }]}>{row.claimLabel}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {report.assetRows ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Decline in value</Text>
+            <Text style={styles.sectionTitle}>Assets and decline in value</Text>
             <View style={[styles.row, styles.head]} wrap={false}>
               <Text style={[styles.cell, styles.headerCell, { flex: 2.2 }]}>Asset</Text>
               <Text style={[styles.cell, styles.headerCell, { flex: 1.6 }]}>Method</Text>
@@ -233,8 +291,8 @@ export function TaxTrackReportDocument({
                   <Text style={[styles.cell, styles.right, { flex: 1.1 }]}>{row.claimLabel}</Text>
                 </View>
                 <Text style={[styles.note, { marginTop: 0, marginBottom: 2 }]}>
-                  First used {row.purchased}
-                  {row.life === "" ? "" : ` · ${row.life} years`} · {row.workUse}% work use
+                  Cost {row.costLabel} · first used {row.purchased}
+                  {row.life === "" ? "" : ` · ${row.life} years`} · {row.workUse}% work use · {row.receiptStatus}
                 </Text>
               </View>
             ))}
@@ -280,6 +338,8 @@ export function TaxTrackReportDocument({
             </Text>
           ))}
         </View>
+
+        {includeDailyLog ? <DailyLog report={report} /> : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notes</Text>
