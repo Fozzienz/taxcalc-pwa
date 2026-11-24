@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { FINANCIAL_YEARS } from "@/lib/ato-rules";
 import type { BackupFile } from "@/lib/backup";
-import { receiptKind } from "@/lib/receiptImage";
+import { receiptExportPaths } from "@/lib/receiptFilename";
 
 const JSON_NAME = "taxtrack.json";
 
@@ -10,6 +10,7 @@ const README = `TaxTrack backup for one income year.
 taxtrack.json is that year's records.
 The Excel workbook and the PDF are the reports for the same year.
 receipts/ holds each photo, PDF, or Word invoice from that year.
+Those filenames match the Receipt column in the Excel report.
 
 Signing in opens the same encrypted records on another device. This zip is the copy you keep.
 `;
@@ -20,15 +21,13 @@ export function backupToZipBytes(file: BackupFile, extras: Record<string, Uint8A
     ...extras,
   };
   const copy = structuredClone(file);
+  const paths = receiptExportPaths(FINANCIAL_YEARS.flatMap((year) => file.years[year.id].expenses));
   for (const year of FINANCIAL_YEARS) {
     copy.years[year.id].expenses = file.years[year.id].expenses.map((expense) => {
       const { receiptImage, ...rest } = expense;
-      if (receiptImage && rest.receiptId) {
-        const kind = receiptKind(receiptImage);
-        const ext = kind === "pdf" ? "pdf" : kind === "docx" ? "docx" : kind === "doc" ? "doc" : "jpg";
-        packed[`receipts/${rest.receiptId}.${ext}`] = dataUrlToBytes(receiptImage);
-      }
-      return rest;
+      const receiptFile = rest.receiptId ? paths[rest.receiptId] : undefined;
+      if (receiptImage && receiptFile) packed[receiptFile] = dataUrlToBytes(receiptImage);
+      return receiptFile ? { ...rest, receiptFile } : rest;
     });
   }
   packed[JSON_NAME] = strToU8(JSON.stringify(copy));
@@ -56,7 +55,8 @@ export function backupFromZipBytes(bytes: Uint8Array): unknown {
     for (const expense of year.expenses ?? []) {
       const id = expense.receiptId;
       if (typeof id !== "string" || expense.receiptImage) continue;
-      const match = Object.keys(files).find((name) => name.startsWith(`receipts/${id}.`));
+      const named = typeof expense.receiptFile === "string" ? expense.receiptFile.replace(/^\/+/, "") : "";
+      const match = named && files[named] ? named : Object.keys(files).find((name) => name.startsWith(`receipts/${id}.`));
       if (!match) continue;
       const mime = mimeFor(match);
       if (!mime) continue;

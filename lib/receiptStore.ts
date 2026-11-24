@@ -107,6 +107,20 @@ export async function installReceiptImages(file: BackupFile, mode: "merge" | "re
   return { ...file, years };
 }
 
+/** Loads each stored file so an export can name it. */
+export async function attachReceiptImages<T extends { receiptId: string | null }>(expenses: readonly T[]): Promise<Array<T & { receiptImage?: string }>> {
+  const imaged = [];
+  for (const expense of expenses) {
+    if (!expense.receiptId) {
+      imaged.push(expense);
+      continue;
+    }
+    const receiptImage = await getReceipt(expense.receiptId);
+    imaged.push(receiptImage ? { ...expense, receiptImage } : expense);
+  }
+  return imaged;
+}
+
 /** Adds the stored JPEG to an export so the file can move to another device. */
 export async function withReceiptImages(file: BackupFile): Promise<BackupFile> {
   const years = {} as BackupFile["years"];

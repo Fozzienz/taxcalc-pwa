@@ -27,6 +27,8 @@ export const BACKUP_FILE_LIMIT = 40_000_000;
 
 export interface BackupExpense extends Expense {
   receiptImage?: string;
+  /** Path inside a zip. The app does not store this on the device. */
+  receiptFile?: string;
 }
 
 export interface BackupYear {
@@ -658,18 +660,22 @@ export function backupForYear(state: AppState, yearId: YearId): BackupFile {
 export async function downloadBackup(state: AppState, yearId: YearId = state.activeYear): Promise<string> {
   const { withReceiptImages } = await import("@/lib/receiptStore");
   const { backupToZipBytes } = await import("@/lib/backupZip");
+  const { receiptExportPaths } = await import("@/lib/receiptFilename");
   const { buildTaxTrackPdfBlob } = await import("@/lib/generateTaxTrackReport");
   const { buildTaxTrackWorkbook } = await import("@/lib/reportWorkbook");
   const year = yearById(yearId);
   const source = state.years[yearId];
+  const file = await withReceiptImages(backupForYear(state, yearId));
+  const imaged = file.years[yearId].expenses;
   const options = {
     rentals: state.settings.rentalProperties === true,
     properties: state.properties ?? [],
     assets: state.assets ?? [],
+    receiptPaths: receiptExportPaths(imaged),
   };
   const data = {
     dayLogs: source.dayLogs,
-    expenses: source.expenses,
+    expenses: imaged,
     rentalExpenses: options.rentals ? (source.rentalExpenses ?? []) : [],
   };
   const prepared = new Date();
@@ -681,7 +687,6 @@ export async function downloadBackup(state: AppState, yearId: YearId = state.act
   const excelBytes = new Uint8Array(workbook.byteLength);
   excelBytes.set(workbook);
   const filename = backupFilename(prepared).replace(/\.json$/, `-${yearId}.zip`);
-  const file = await withReceiptImages(backupForYear(state, yearId));
   const zipped = backupToZipBytes(file, {
     [`taxtrack-report-${yearId}.xlsx`]: excelBytes,
     [`taxtrack-report-${yearId}.pdf`]: pdfBytes,

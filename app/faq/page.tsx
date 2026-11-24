@@ -61,8 +61,8 @@ const TOPICS: { id: string; title: string; body: string[] }[] = [
   },
   {
     id: "mytax",
-    title: "Copying figures into myTax",
-    body: ["The Summary tab is the list to transcribe. Working-from-home hours and the whole-dollar amount sit with the other categories. If rental properties are enabled, their expenses are a separate total. Copy summary puts that text on the clipboard. Excel report and PDF report, on the summary and under Data and backup, download the hours, expenses, and totals for the selected income year. Type the figures into ATO myTax yourself. TaxTrack does not lodge a return."],
+    title: "Entering figures in myTax",
+    body: ["The Summary tab is the list to type from. Working-from-home hours and the whole-dollar amount sit with the other categories. If rental properties are enabled, their expenses are a separate total. Excel, the PDF, and a zip of the receipts are in the menu, under Data and backup. Type the figures into ATO myTax yourself. TaxTrack does not lodge a return."],
   },
   {
     id: "rentals",

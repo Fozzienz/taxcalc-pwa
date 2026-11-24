@@ -12,6 +12,10 @@ export interface SummaryRow {
   label: string;
   value: string;
   strong?: boolean;
+  /** A money amount. Zero amounts stay off the summary unless the reader asks for them. */
+  cents?: number;
+  /** Hours, days, or a rate. These fold onto one line on screen. */
+  fold?: boolean;
 }
 
 export interface SummaryBlock {
@@ -20,6 +24,8 @@ export interface SummaryBlock {
   kicker: string;
   rows: SummaryRow[];
   notes: string[];
+  /** False when there is nothing to enter, and no hours or rental income to keep. */
+  shown: boolean;
 }
 
 export interface SummaryModel {
@@ -82,22 +88,23 @@ export function buildSummary(
       id: "wfh",
       title: "Working from home",
       kicker: wfhMethod === "actual" ? "Other work-related expenses · actual cost method" : "Other work-related expenses · fixed rate method",
+      shown: homeDollars > 0 || figures.wfhHours > 0,
       rows:
         wfhMethod === "actual"
           ? [
-              { label: "Hours logged", value: formatHours(figures.wfhHours) },
-              { label: "Days logged", value: String(figures.wfhDays) },
-              { label: "Electricity and gas", value: formatCents(figures.energy.cents) },
-              { label: "Phone", value: formatCents(figures.phone.cents) },
-              { label: "Internet", value: formatCents(figures.internet.cents) },
-              { label: "Stationery and consumables", value: formatCents(figures.stationery.cents) },
+              { label: "Hours logged", value: formatHours(figures.wfhHours), fold: true },
+              { label: "Days logged", value: String(figures.wfhDays), fold: true },
+              { label: "Electricity and gas", value: formatCents(figures.energy.cents), cents: figures.energy.cents },
+              { label: "Phone", value: formatCents(figures.phone.cents), cents: figures.phone.cents },
+              { label: "Internet", value: formatCents(figures.internet.cents), cents: figures.internet.cents },
+              { label: "Stationery and consumables", value: formatCents(figures.stationery.cents), cents: figures.stationery.cents },
               { label: "Enter", value: formatWholeDollars(homeDollars), strong: true },
             ]
           : [
-              { label: "Hours logged", value: formatHours(figures.wfhHours) },
-              { label: "Days logged", value: String(figures.wfhDays) },
-              { label: "Fixed rate", value: formatCents(year.wfhCentsPerHour) },
-              { label: "Exact amount", value: formatCents(figures.wfhCents) },
+              { label: "Hours logged", value: formatHours(figures.wfhHours), fold: true },
+              { label: "Days logged", value: String(figures.wfhDays), fold: true },
+              { label: "Fixed rate", value: formatCents(year.wfhCentsPerHour), fold: true },
+              { label: "Exact amount", value: formatCents(figures.wfhCents), cents: figures.wfhCents },
               { label: "Enter", value: formatWholeDollars(figures.wfhDollars), strong: true },
             ],
       notes:
@@ -116,9 +123,10 @@ export function buildSummary(
       id: "clothing",
       title: "Clothing, laundry and dry-cleaning",
       kicker: "Work-related clothing expenses",
+      shown: clothing.dollars > 0,
       rows: [
-        { label: "Clothing and uniforms", value: formatCents(figures.clothing.cents) },
-        { label: "Laundry", value: formatCents(figures.laundry.cents) },
+        { label: "Clothing and uniforms", value: formatCents(figures.clothing.cents), cents: figures.clothing.cents },
+        { label: "Laundry", value: formatCents(figures.laundry.cents), cents: figures.laundry.cents },
         { label: "Enter", value: formatWholeDollars(clothing.dollars), strong: true },
       ],
       notes: [
@@ -132,8 +140,9 @@ export function buildSummary(
       id: "donations",
       title: "Gifts or donations",
       kicker: "Deductible gift recipients",
+      shown: figures.donations.wholeDollars > 0,
       rows: [
-        { label: "Confirmed DGR gifts", value: formatCents(figures.donations.cents) },
+        { label: "Confirmed DGR gifts", value: formatCents(figures.donations.cents), cents: figures.donations.cents },
         { label: "Enter", value: formatWholeDollars(figures.donations.wholeDollars), strong: true },
       ],
       notes: ["Gifts must be $2 or more to an organisation with DGR status."],
@@ -142,8 +151,9 @@ export function buildSummary(
       id: "education",
       title: "Self-education expenses",
       kicker: "Current work only",
+      shown: figures.selfEducation.wholeDollars > 0,
       rows: [
-        { label: "Claimable self-education", value: formatCents(figures.selfEducation.cents) },
+        { label: "Claimable self-education", value: formatCents(figures.selfEducation.cents), cents: figures.selfEducation.cents },
         { label: "Enter", value: formatWholeDollars(figures.selfEducation.wholeDollars), strong: true },
       ],
       notes: [
@@ -155,10 +165,11 @@ export function buildSummary(
       id: "other",
       title: "Other work expenses",
       kicker: wfhMethod === "actual" ? "Other work-related expenses, excluding home running costs" : "Other work-related expenses, excluding the fixed rate",
+      shown: otherWork.dollars > 0,
       rows: [
-        { label: "Tools and equipment, $300 or under", value: formatCents(figures.tools.cents) },
-        { label: "Subscriptions", value: formatCents(figures.subscriptions.cents) },
-        { label: "Other", value: formatCents(figures.other.cents) },
+        { label: "Tools and equipment, $300 or under", value: formatCents(figures.tools.cents), cents: figures.tools.cents },
+        { label: "Subscriptions", value: formatCents(figures.subscriptions.cents), cents: figures.subscriptions.cents },
+        { label: "Other", value: formatCents(figures.other.cents), cents: figures.other.cents },
         { label: "Enter", value: formatWholeDollars(otherWork.dollars), strong: true },
       ],
       notes: [
@@ -171,12 +182,13 @@ export function buildSummary(
             id: "car",
             title: "Work-related car expenses",
             kicker: "Cents per kilometre",
+            shown: true,
             rows: [
-              { label: "Kilometres logged", value: `${formatKilometres(car.kilometres)} km` },
+              { label: "Kilometres logged", value: `${formatKilometres(car.kilometres)} km`, fold: true },
               ...(Math.abs(car.claimKilometres - car.kilometres) > 0.001
                 ? [{ label: "Kilometres that count", value: `${formatKilometres(car.claimKilometres)} km` }]
                 : []),
-              { label: "Rate", value: `${formatCents(year.carCentsPerKm)} per km` },
+              { label: "Rate", value: `${formatCents(year.carCentsPerKm)} per km`, fold: true },
               ...(car.vehicles.length > 1
                 ? car.vehicles.map((row) => ({
                     label: row.vehicle,
@@ -197,8 +209,9 @@ export function buildSummary(
       id: "tax",
       title: "Cost of managing tax affairs",
       kicker: "Tax agent fees",
+      shown: figures.taxAffairs.wholeDollars > 0,
       rows: [
-        { label: "Fees logged", value: formatCents(figures.taxAffairs.cents) },
+        { label: "Fees logged", value: formatCents(figures.taxAffairs.cents), cents: figures.taxAffairs.cents },
         { label: "Enter", value: formatWholeDollars(figures.taxAffairs.wholeDollars), strong: true },
       ],
       notes: ["Claim the fee in the year you paid it."],
@@ -210,8 +223,9 @@ export function buildSummary(
       id: "decline",
       title: "Decline in value",
       kicker: "Depreciating assets · days held divided by 365",
+      shown: decline.dollars > 0,
       rows: [
-        ...decline.rows.map((row) => ({ label: row.description, value: formatCents(row.claimCents) })),
+        ...decline.rows.map((row) => ({ label: row.description, value: formatCents(row.claimCents), cents: row.claimCents })),
         { label: "Enter", value: formatWholeDollars(decline.dollars), strong: true },
       ],
       notes: [
@@ -225,9 +239,10 @@ export function buildSummary(
       id: "rentals",
       title: "Rental properties",
       kicker: "Rent received, and the rental expenses you logged",
+      shown: rental.dollars > 0 || rental.incomeCents > 0,
       rows: [
-        { label: "Rent received", value: formatCents(rental.incomeCents) },
-        { label: "Rent received, whole dollars", value: formatWholeDollars(rental.incomeDollars) },
+        { label: "Rent received", value: formatCents(rental.incomeCents), cents: rental.incomeCents },
+        { label: "Rent received, whole dollars", value: formatWholeDollars(rental.incomeDollars), cents: rental.incomeCents === 0 ? 0 : undefined },
         ...rental.byProperty.map((property) => ({ label: property.address, value: formatCents(property.cents) })),
         ...rental.byCategory.filter((row) => row.cents > 0).map((row) => ({ label: row.label, value: formatCents(row.cents) })),
         { label: "Enter", value: formatWholeDollars(rental.dollars), strong: true },
@@ -272,6 +287,22 @@ export function buildSummary(
   return { ...model, text: plainText(year, model, clothing.dollars, otherWork.dollars, homeDollars) };
 }
 
+/** Names the myTax categories that have nothing to enter. */
+export function nothingEnteredLine(blocks: readonly SummaryBlock[]): string {
+  const names = blocks.filter((block) => !block.shown).map((block) => block.title);
+  if (names.length === 0) return "";
+  if (names.length === 1) return `Nothing entered for ${names[0]}.`;
+  return `Nothing entered for ${names.slice(0, -1).join(", ")}, or ${names[names.length - 1]}.`;
+}
+
+function enterPart(model: Omit<SummaryModel, "text">, id: string, label: string): string {
+  const block = model.blocks.find((item) => item.id === id);
+  if (!block?.shown) return "";
+  const enter = block.rows.find((row) => row.label === "Enter")?.value;
+  if (!enter || enter === formatWholeDollars(0)) return "";
+  return `${label} ${enter}`;
+}
+
 function plainText(
   year: FinancialYear,
   model: Omit<SummaryModel, "text">,
@@ -288,22 +319,32 @@ function plainText(
   ];
 
   for (const block of model.blocks) {
+    if (!block.shown) continue;
     lines.push(block.title.toUpperCase());
     lines.push(block.kicker);
     for (const row of block.rows) {
+      if (row.cents === 0) continue;
       lines.push(`${row.label}: ${row.value}`);
     }
     for (const note of block.notes) lines.push(note);
     lines.push("");
   }
 
+  const hidden = nothingEnteredLine(model.blocks);
+  if (hidden) lines.push(hidden);
   lines.push(`TOTAL TO ENTER: ${formatWholeDollars(model.totalDollars)}`);
-  const rentalEnter = model.blocks.find((block) => block.id === "rentals")?.rows.find((row) => row.label === "Enter")?.value;
-  const declineEnter = model.blocks.find((block) => block.id === "decline")?.rows.find((row) => row.label === "Enter")?.value;
-  const carEnter = model.blocks.find((block) => block.id === "car")?.rows.find((row) => row.label === "Enter")?.value;
-  lines.push(
-    `Working from home ${formatWholeDollars(homeDollars)} + clothing and laundry ${formatWholeDollars(clothingDollars)} + self-education ${formatWholeDollars(model.figures.selfEducation.wholeDollars)} + other work expenses ${formatWholeDollars(otherWorkDollars)} + donations ${formatWholeDollars(model.figures.donations.wholeDollars)} + tax affairs ${formatWholeDollars(model.figures.taxAffairs.wholeDollars)}${carEnter ? ` + car expenses ${carEnter}` : ""}${declineEnter ? ` + decline in value ${declineEnter}` : ""}${rentalEnter ? ` + rental properties ${rentalEnter}` : ""}.`,
-  );
+  const parts = [
+    homeDollars > 0 ? `Working from home ${formatWholeDollars(homeDollars)}` : "",
+    clothingDollars > 0 ? `clothing and laundry ${formatWholeDollars(clothingDollars)}` : "",
+    model.figures.selfEducation.wholeDollars > 0 ? `self-education ${formatWholeDollars(model.figures.selfEducation.wholeDollars)}` : "",
+    otherWorkDollars > 0 ? `other work expenses ${formatWholeDollars(otherWorkDollars)}` : "",
+    model.figures.donations.wholeDollars > 0 ? `donations ${formatWholeDollars(model.figures.donations.wholeDollars)}` : "",
+    model.figures.taxAffairs.wholeDollars > 0 ? `tax affairs ${formatWholeDollars(model.figures.taxAffairs.wholeDollars)}` : "",
+    enterPart(model, "car", "car expenses"),
+    enterPart(model, "decline", "decline in value"),
+    enterPart(model, "rentals", "rental properties"),
+  ].filter((part) => part.length > 0);
+  if (parts.length > 0) lines.push(`${parts.join(" + ")}.`);
   lines.push("");
   lines.push(model.exclusionTitle.toUpperCase());
   if (model.exclusionRows.length === 0) {

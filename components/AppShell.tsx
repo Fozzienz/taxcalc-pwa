@@ -267,12 +267,6 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
             summary={summary}
             logs={Object.values(logs)}
             expenses={expenses}
-            rentals={{
-              enabled: rentalsOn,
-              properties: store.state.properties ?? [],
-              expenses: store.yearData.rentalExpenses ?? [],
-            }}
-            assets={store.state.assets ?? []}
             onOpenDay={(date) => setOverlay({ type: "day", date })}
             onEditExpense={(id) => {
               setDraftDate(null);

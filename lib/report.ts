@@ -1,10 +1,10 @@
-import { assetTreatment, EXPORT_DISCLAIMER, type FinancialYear } from "@/lib/ato-rules";
+import { assetTreatment, EXPORT_DISCLAIMER, RECORD_KEEPING, type FinancialYear } from "@/lib/ato-rules";
 import { expenseClaimCents } from "@/lib/calculations";
-import { carClaims } from "@/lib/car";
-import { formatPeriod, formatTimestamp } from "@/lib/dates";
-import { formatCents, formatHours, formatWholeDollars, toCents, wholeDollarsFromCents } from "@/lib/money";
+import { carClaims, formatKilometres } from "@/lib/car";
+import { formatMonth, formatPeriod, formatTimestamp } from "@/lib/dates";
+import { deductionCents, formatCents, formatHours, formatWholeDollars, toCents, wholeDollarsFromCents } from "@/lib/money";
 import { depreciationForPeriod, depreciationMethodLabel } from "@/lib/depreciation";
-import { buildSummary, type SummaryModel } from "@/lib/summary";
+import { buildSummary, nothingEnteredLine, type SummaryModel } from "@/lib/summary";
 import { categoryById, isRunningCost, modeById, rentalCategoryById, type DepreciatingAsset, type Expense, type RentalProperty, type WfhMethod, type YearData } from "@/lib/types";
 
 export interface YearReport {
@@ -13,9 +13,12 @@ export interface YearReport {
   period: string;
   prepared: string;
   summaryRows: Array<{ item: string; detail: string; enter: string; enterDollars: number }>;
+  /** Categories with nothing to enter. The day log and the expense list stay complete. */
+  emptyNote: string;
   totalEnter: string;
   totalDollars: number;
   hourRows: Array<{ date: string; mode: string; hours: number; counts: string; notes: string }>;
+  monthRows: Array<{ month: string; days: number; hours: number; exactCents: number | null; exactLabel: string }>;
   hourNote: string;
   wfhHours: number;
   wfhDays: number;
@@ -34,6 +37,19 @@ export interface YearReport {
     amountLabel: string;
     included: string;
     notes: string;
+    receiptStatus: string;
+    receiptPath: string;
+  }>;
+  mileageRows: Array<{
+    date: string;
+    purpose: string;
+    vehicle: string;
+    kilometres: number;
+    rateLabel: string;
+    claimAud: number;
+    claimLabel: string;
+    receiptStatus: string;
+    receiptPath: string;
   }>;
   exclusions: string[];
   footnotes: string[];
@@ -45,16 +61,19 @@ export interface YearReport {
     amountAud: number;
     amountLabel: string;
     notes: string;
+    receiptStatus: string;
   }> | null;
   assetRows: Array<{
     description: string;
     purchased: string;
+    costLabel: string;
     method: string;
     life: number | "";
     workUse: number;
     daysHeld: number;
     claimAud: number;
     claimLabel: string;
+    receiptStatus: string;
   }> | null;
 }
 
@@ -96,40 +115,77 @@ function enterDollars(summary: SummaryModel, id: string): number {
   return 0;
 }
 
+function receiptCell(expense: Expense, wfhMethod: WfhMethod, paths: Record<string, string>): { receiptStatus: string; receiptPath: string } {
+  const path = expense.receiptId ? paths[expense.receiptId] ?? "" : "";
+  if (path) return { receiptStatus: "Attached", receiptPath: path };
+  if (isRunningCost(expense.category) && wfhMethod !== "actual") return { receiptStatus: "Covered by the fixed rate", receiptPath: "" };
+  return { receiptStatus: "Missing", receiptPath: "" };
+}
+
+function monthRowsFor(days: YearData["dayLogs"][string][], year: FinancialYear, wfhMethod: WfhMethod) {
+  const buckets = new Map<string, { days: number; tenths: number }>();
+  for (const log of days) {
+    if (log.mode !== "wfh" || log.hours <= 0) continue;
+    const key = log.date.slice(0, 7);
+    const bucket = buckets.get(key) ?? { days: 0, tenths: 0 };
+    bucket.days += 1;
+    bucket.tenths += Math.round(log.hours * 10);
+    buckets.set(key, bucket);
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, bucket]) => {
+      const [yearText, monthText] = key.split("-");
+      const exactCents = wfhMethod === "actual" ? null : deductionCents(bucket.tenths, year.wfhCentsPerHour);
+      return {
+        month: formatMonth(Number(yearText), Number(monthText) - 1),
+        days: bucket.days,
+        hours: bucket.tenths / 10,
+        exactCents,
+        exactLabel: exactCents === null ? "" : formatCents(exactCents),
+      };
+    });
+}
+
 export function buildYearReport(
   year: FinancialYear,
   data: YearData,
   prepared = new Date(),
-  options: { rentals?: boolean; properties?: readonly RentalProperty[]; assets?: readonly DepreciatingAsset[] } = {},
+  options: { rentals?: boolean; properties?: readonly RentalProperty[]; assets?: readonly DepreciatingAsset[]; receiptPaths?: Record<string, string> } = {},
 ): YearReport {
   const summary = buildSummary(year, data, options);
   const wfhMethod: WfhMethod = summary.wfhMethod;
   const days = Object.values(data.dayLogs).sort((a, b) => a.date.localeCompare(b.date));
   const expenses = [...data.expenses].sort((a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description));
   const tripClaims = carClaims(expenses, year.carCentsPerKm);
+  const paths = options.receiptPaths ?? {};
+  const workExpenses = expenses.filter((expense) => expense.category !== "car");
+  const carExpenses = expenses.filter((expense) => expense.category === "car");
 
   return {
     filenameBase: `taxtrack-report-${year.id}`,
     yearLabel: year.label,
     period: formatPeriod(year.start, year.end),
     prepared: formatTimestamp(prepared.toISOString()),
-    summaryRows: summary.blocks.map((block) => {
+    summaryRows: summary.blocks.filter((block) => block.shown).map((block) => {
       const enter = block.rows.find((row) => row.label === "Enter");
       const detail = block.rows
-        .filter((row) => row.label !== "Enter")
+        .filter((row) => row.label !== "Enter" && row.cents !== 0)
         .map((row) => `${row.label}: ${row.value}`)
         .join(". ");
       return { item: block.title, detail, enter: enter?.value ?? formatWholeDollars(0), enterDollars: enterDollars(summary, block.id) };
     }),
+    emptyNote: nothingEnteredLine(summary.blocks),
     totalEnter: formatWholeDollars(summary.totalDollars),
     totalDollars: summary.totalDollars,
     hourRows: days.map((log) => ({
       date: auDate(log.date),
       mode: modeById(log.mode).label,
-      hours: Math.round(log.hours * 10) / 10,
+      hours: Number.isFinite(log.hours) ? Math.round(log.hours * 10) / 10 : 0,
       counts: log.mode === "wfh" && log.hours > 0 ? "Yes" : "No",
       notes: log.notes,
     })),
+    monthRows: monthRowsFor(days, year, wfhMethod),
     hourNote:
       wfhMethod === "actual"
         ? `${formatHours(summary.figures.wfhHours)} hours over ${summary.figures.wfhDays} ${summary.figures.wfhDays === 1 ? "day" : "days"} are the record. Enter ${formatWholeDollars(wholeDollarsFromCents(summary.figures.runningCents))} from the work share of the bills.`
@@ -138,22 +194,39 @@ export function buildYearReport(
     wfhDays: summary.figures.wfhDays,
     wfhMethodLabel: wfhMethod === "actual" ? "Actual costs" : "Fixed rate",
     rateAud: aud(year.wfhCentsPerHour),
-    expenseRows: expenses.map((expense) => ({
-      date: auDate(expense.date),
-      description: expense.description,
-      merchant: expense.merchant,
-      category: categoryById(expense.category).label,
-      payment: expense.paymentMethod === "card" ? "Card" : expense.paymentMethod === "cash" ? "Cash" : "Other",
-      amountAud: aud(toCents(expense.amount)),
-      workUse: expense.workUsePercent,
-      claimAud: aud(expenseClaimCents(expense, tripClaims, wfhMethod)),
-      claimLabel: formatCents(expenseClaimCents(expense, tripClaims, wfhMethod)),
-      amountLabel: formatCents(toCents(expense.amount)),
-      included: inclusion(expense, expenseClaimCents(expense, tripClaims, wfhMethod), wfhMethod),
-      notes: expense.notes,
-    })),
+    expenseRows: workExpenses.map((expense) => {
+      const claim = expenseClaimCents(expense, tripClaims, wfhMethod);
+      return {
+        date: auDate(expense.date),
+        description: expense.description,
+        merchant: expense.merchant,
+        category: categoryById(expense.category).label,
+        payment: expense.paymentMethod === "card" ? "Card" : expense.paymentMethod === "cash" ? "Cash" : "Other",
+        amountAud: aud(toCents(expense.amount)),
+        workUse: expense.workUsePercent,
+        claimAud: aud(claim),
+        claimLabel: formatCents(claim),
+        amountLabel: formatCents(toCents(expense.amount)),
+        included: inclusion(expense, claim, wfhMethod),
+        notes: expense.notes,
+        ...receiptCell(expense, wfhMethod, paths),
+      };
+    }),
+    mileageRows: carExpenses.map((expense) => {
+      const claim = expenseClaimCents(expense, tripClaims, wfhMethod);
+      return {
+        date: auDate(expense.date),
+        purpose: expense.description || expense.notes || "Work trip",
+        vehicle: expense.vehicle,
+        kilometres: expense.kilometres ?? 0,
+        rateLabel: `${formatCents(year.carCentsPerKm)} per km`,
+        claimAud: aud(claim),
+        claimLabel: formatCents(claim),
+        ...receiptCell(expense, wfhMethod, paths),
+      };
+    }),
     exclusions: summary.exclusionRows.length > 0 ? summary.exclusionRows : ["Nothing is held out of the estimate."],
-    footnotes: [...summary.footnotes, EXPORT_DISCLAIMER],
+    footnotes: [...summary.footnotes, RECORD_KEEPING, EXPORT_DISCLAIMER],
     rentalRows: options.rentals
       ? [...(data.rentalExpenses ?? [])]
           .sort((a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description))
@@ -165,6 +238,7 @@ export function buildYearReport(
             amountAud: aud(toCents(expense.amount)),
             amountLabel: formatCents(toCents(expense.amount)),
             notes: expense.notes,
+            receiptStatus: "No file",
           }))
       : null,
     assetRows:
@@ -181,6 +255,8 @@ export function buildYearReport(
               daysHeld: row?.daysHeld ?? 0,
               claimAud: aud(row?.claimCents ?? 0),
               claimLabel: formatCents(row?.claimCents ?? 0),
+              costLabel: formatCents(toCents(asset.cost)),
+              receiptStatus: "No file",
             };
           })
         : null,
@@ -215,9 +291,14 @@ export function buildCsvReport(
     csvLine(["=== TOTALS ==="]),
     csvLine(["Item", "Detail", "Whole dollars to enter"]),
     ...report.summaryRows.map((row) => csvLine([row.item, row.detail, row.enterDollars])),
+    ...(report.emptyNote ? [csvLine(["Nothing entered", report.emptyNote])] : []),
     csvLine(["Total to enter", "", report.totalDollars]),
     csvLine([]),
-    csvLine([report.wfhMethodLabel === "Actual costs" ? "=== WORK FROM HOME — Actual costs ===" : "=== WORK FROM HOME — Fixed rate ==="]),
+    csvLine(["=== WFH MONTHLY ==="]),
+    csvLine(["Month", "WFH days", "WFH hours", report.wfhMethodLabel === "Actual costs" ? "Claim" : "Exact amount"]),
+    ...report.monthRows.map((row) => csvLine([row.month, row.days, row.hours, row.exactLabel || "See the bills"])),
+    csvLine([]),
+    csvLine(["=== WFH DAILY LOG ==="]),
     csvLine(["Date", "Mode", "Hours", report.wfhMethodLabel === "Actual costs" ? "Worked from home" : "Counts toward the fixed rate", "Notes"]),
     ...(report.hourRows.length > 0
       ? report.hourRows.map((row) => csvLine([row.date, row.mode, row.hours, row.counts, row.notes]))
@@ -226,7 +307,7 @@ export function buildCsvReport(
     csvLine(["FY total claim (AUD)", report.summaryRows.find((row) => row.item === "Working from home")?.enterDollars ?? 0]),
     csvLine([]),
     csvLine(["=== EXPENSES ==="]),
-    csvLine(["Date", "Description", "Merchant", "Category", "Payment", "Amount (AUD)", "Work use %", "Claim (AUD)", "In the total", "Notes"]),
+    csvLine(["Date", "Description", "Merchant", "Category", "Payment", "Amount (AUD)", "Work use %", "Claim (AUD)", "In the total", "Receipt", "Notes"]),
     ...(report.expenseRows.length > 0
       ? report.expenseRows.map((row) =>
           csvLine([
@@ -239,10 +320,20 @@ export function buildCsvReport(
             row.workUse,
             row.claimAud,
             row.included,
+            row.receiptPath || row.receiptStatus,
             row.notes,
           ]),
         )
       : [csvLine(["No expenses logged"])]),
+    csvLine([]),
+    ...(report.mileageRows.length > 0
+      ? [
+          csvLine(["=== MILEAGE ==="]),
+          csvLine(["Date", "Purpose", "Vehicle", "Kilometres", "Rate", "Claim (AUD)", "Receipt"]),
+          ...report.mileageRows.map((row) => csvLine([row.date, row.purpose, row.vehicle, formatKilometres(row.kilometres), row.rateLabel, row.claimAud, row.receiptPath || row.receiptStatus])),
+          csvLine([]),
+        ]
+      : []),
     csvLine([]),
     ...(report.assetRows
       ? [
