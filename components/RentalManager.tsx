@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Building2 } from "lucide-react";
+import { Building2, ChevronDown } from "lucide-react";
 import type { FinancialYear } from "@/lib/ato-rules";
-import { isRealIsoDate, isWithin } from "@/lib/dates";
+import { formatMonth, isRealIsoDate, isWithin } from "@/lib/dates";
 import { formatCents, toCents } from "@/lib/money";
-import { RENTAL_EXPENSE_CATEGORIES, RENTAL_INCOME_CATEGORIES, rentalCategoryById, type RentalCategory, type RentalExpense, type RentalProperty } from "@/lib/types";
+import { isRentalIncome, RENTAL_EXPENSE_CATEGORIES, RENTAL_INCOME_CATEGORIES, rentalCategoryById, type RentalCategory, type RentalExpense, type RentalProperty } from "@/lib/types";
 import { buttonClass, cx, Field, inputClass, Modal, Panel } from "@/components/ui";
 
 export function RentalManager({
@@ -45,7 +45,13 @@ export function RentalManager({
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [openMonths, setOpenMonths] = useState<Set<string> | null>(null);
+  const [monthProperty, setMonthProperty] = useState(properties[0]?.id ?? "");
   const selected = properties.find((property) => property.id === selectedId) ?? properties[0];
+  if (selected && monthProperty !== selected.id) {
+    setMonthProperty(selected.id);
+    setOpenMonths(null);
+  }
   const rows = expenses.filter((expense) => expense.propertyId === selected?.id).sort((a, b) => b.date.localeCompare(a.date));
 
   function closeAddress() {
@@ -116,6 +122,7 @@ export function RentalManager({
     setDescription("");
     setNotes("");
     setFormError(null);
+    setOpenMonths((current) => new Set([...(current ?? []), date.slice(0, 7)]));
     setSavedNote(record === "income" ? "Rent added." : "Expense added.");
   }
 
@@ -334,13 +341,80 @@ export function RentalManager({
               </div>
               {formError ? <p className="text-sm text-rose">{formError}</p> : null}
               {savedNote ? <p className="text-sm text-mint">{savedNote}</p> : null}
-              <ul className="divide-y divide-line">
-                {rows.length === 0 ? <li className="py-3 text-sm text-fog">No rent or expenses for this address in {year.label}.</li> : null}
-                {rows.map((expense) => (
-                  <li key={expense.id} className="flex items-start justify-between gap-3 py-3">
+              {rows.length === 0 ? <p className="text-sm text-fog">No rent or expenses for this address in {year.label}.</p> : <RentalMonths rows={rows} openMonths={openMonths} onOpenMonths={setOpenMonths} onDelete={onDelete} />}
+            </Panel>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function RentalMonths({
+  rows,
+  openMonths,
+  onOpenMonths,
+  onDelete,
+}: {
+  rows: RentalExpense[];
+  openMonths: Set<string> | null;
+  onOpenMonths: (months: Set<string> | null) => void;
+  onDelete: (id: string) => void;
+}) {
+  const groups = new Map<string, RentalExpense[]>();
+  for (const row of rows) {
+    const key = row.date.slice(0, 7);
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+  const months = [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  const newest = months[0]?.[0] ?? "";
+
+  function toggle(key: string) {
+    const base = openMonths ?? new Set(newest ? [newest] : []);
+    const next = new Set(base);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onOpenMonths(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      {months.map(([key, items]) => {
+        const [yearText, monthText] = key.split("-");
+        const label = formatMonth(Number(yearText), Number(monthText) - 1);
+        const open = openMonths ? openMonths.has(key) : key === newest;
+        let expenseCents = 0;
+        let incomeCents = 0;
+        for (const item of items) {
+          const cents = toCents(item.amount);
+          if (isRentalIncome(item.category)) incomeCents += cents;
+          else expenseCents += cents;
+        }
+        const meta = [
+          String(items.length),
+          expenseCents > 0 ? formatCents(expenseCents) : "",
+          incomeCents > 0 ? `${formatCents(incomeCents)} in` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <section key={key} className="overflow-hidden rounded-xl border border-line">
+            <button type="button" className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left" aria-expanded={open} onClick={() => toggle(key)}>
+              <span className="text-sm font-semibold">{label}</span>
+              <span className="flex items-center gap-2 text-xs text-fog">
+                {meta}
+                <ChevronDown size={16} className={cx("shrink-0 transition", open && "rotate-180")} aria-hidden />
+              </span>
+            </button>
+            {open ? (
+              <ul className="border-t border-line">
+                {items.map((expense) => (
+                  <li key={expense.id} className="flex items-start justify-between gap-3 border-b border-line px-3 py-2.5 last:border-b-0">
                     <div>
                       <p className="text-sm font-semibold">{expense.description}</p>
-                      <p className="mt-1 text-xs text-fog">
+                      <p className="mt-0.5 text-xs text-fog">
                         {expense.date.split("-").reverse().join("/")} · {rentalCategoryById(expense.category).label}
                         {expense.notes ? ` · ${expense.notes}` : ""}
                       </p>
@@ -354,10 +428,10 @@ export function RentalManager({
                   </li>
                 ))}
               </ul>
-            </Panel>
-          ) : null}
-        </>
-      )}
+            ) : null}
+          </section>
+        );
+      })}
     </div>
   );
 }

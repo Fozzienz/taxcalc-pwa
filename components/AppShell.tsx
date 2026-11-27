@@ -290,6 +290,10 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
             editingId={editingId}
             onSave={(expense) => store.saveExpense(store.year.id, expense)}
             onDelete={(id) => store.deleteExpense(store.year.id, id)}
+            onDismiss={() => {
+              setEditingId(null);
+              setDraftDate(null);
+            }}
           />
         ) : null}
         {tab === "assets" ? (

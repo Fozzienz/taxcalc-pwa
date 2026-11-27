@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useSyncExternalStore } from "react";
-import { ImagePlus, Receipt } from "lucide-react";
+import { ChevronDown, ImagePlus, Receipt } from "lucide-react";
 import { assetTreatment, CATEGORY_HINTS, type FinancialYear } from "@/lib/ato-rules";
 import { carClaims, formatKilometres, vehicleName } from "@/lib/car";
-import { defaultEntryDate, isRealIsoDate, isWithin } from "@/lib/dates";
+import { defaultEntryDate, formatMonth, isRealIsoDate, isWithin } from "@/lib/dates";
 import { createId } from "@/lib/id";
 import { prepareReceipt, receiptKind, receiptLabel } from "@/lib/receiptImage";
 import { ReceiptPreview } from "@/components/ReceiptPreview";
@@ -21,7 +21,7 @@ import {
   type PaymentMethod,
   type WfhMethod,
 } from "@/lib/types";
-import { buttonClass, cx, Field, inputClass, Panel } from "@/components/ui";
+import { buttonClass, cx, Field, inputClass, Modal, Panel } from "@/components/ui";
 
 interface FormState {
   id: string;
@@ -96,6 +96,7 @@ export function ExpenseManager({
   editingId,
   onSave,
   onDelete,
+  onDismiss,
 }: {
   year: FinancialYear;
   wfhMethod: WfhMethod;
@@ -104,8 +105,8 @@ export function ExpenseManager({
   editingId: string | null;
   onSave: (expense: Expense) => void;
   onDelete: (id: string) => void;
+  onDismiss?: () => void;
 }) {
-  const formRef = useRef<HTMLFormElement>(null);
   const [seenYear, setSeenYear] = useState(year.id);
   const [form, setForm] = useState<FormState>(() => {
     if (editingId) {
@@ -118,8 +119,9 @@ export function ExpenseManager({
   const [error, setError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [openMonths, setOpenMonths] = useState<Set<string> | null>(null);
+  const [editorOpen, setEditorOpen] = useState(() => Boolean(editingId || draftDate));
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [workLoads, setWorkLoads] = useState("");
   const [mixedLoads, setMixedLoads] = useState("");
   const [compressing, setCompressing] = useState(false);
@@ -132,13 +134,9 @@ export function ExpenseManager({
   if (seenYear !== year.id) {
     setSeenYear(year.id);
     setForm(blankForm(year));
+    setEditorOpen(false);
     setError(null);
   }
-
-  useEffect(() => {
-    if (!editingId && !draftDate) return;
-    formRef.current?.scrollIntoView({ block: "start" });
-  }, [editingId, draftDate]);
 
   const amountValue = Number(form.amount);
   const equipment = form.category === "tools" || ((form.category === "self-education" || form.category === "other") && form.isEquipment);
@@ -264,14 +262,40 @@ export function ExpenseManager({
     setWorkLoads("");
     setMixedLoads("");
     setError(null);
+    setConfirmDelete(false);
+    setEditorOpen(false);
+    setOpenMonths((current) => new Set([...(current ?? []), form.date.slice(0, 7)]));
     setSavedNote(editing ? "Expense updated." : "Expense added.");
+    onDismiss?.();
   }
 
-  function load(expense: Expense) {
-    setForm(fromExpense(expense));
-    setOpenId(expense.id);
+  function openNew() {
+    const next = blankForm(year);
+    setForm(draftDate ? { ...next, date: draftDate } : next);
+    setWorkLoads("");
+    setMixedLoads("");
     setError(null);
-    setPendingDelete(null);
+    setConfirmDelete(false);
+    setEditorOpen(true);
+  }
+
+  function openExpense(expense: Expense) {
+    setForm(fromExpense(expense));
+    setWorkLoads("");
+    setMixedLoads("");
+    setError(null);
+    setConfirmDelete(false);
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
+    setEditorOpen(false);
+    setForm(blankForm(year));
+    setWorkLoads("");
+    setMixedLoads("");
+    setError(null);
+    setConfirmDelete(false);
+    onDismiss?.();
   }
 
   const visible = expenses
@@ -281,20 +305,51 @@ export function ExpenseManager({
     })
     .sort((a, b) => b.date.localeCompare(a.date) || a.description.localeCompare(b.description));
   const tripClaims = carClaims(expenses, year.carCentsPerKm);
+  const searching = query.trim().length > 0;
+  const months = new Map<string, Expense[]>();
+  for (const expense of visible) {
+    const key = expense.date.slice(0, 7);
+    const list = months.get(key) ?? [];
+    list.push(expense);
+    months.set(key, list);
+  }
+  const monthGroups = [...months.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  const newestMonth = monthGroups[0]?.[0] ?? "";
+
+  function toggleMonth(key: string) {
+    setOpenMonths((current) => {
+      const base = current ?? new Set(searching ? monthGroups.map(([id]) => id) : newestMonth ? [newestMonth] : []);
+      const next = new Set(base);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  const editorTitle = form.id ? form.description.trim() || "Edit expense" : "Add expense";
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="space-y-4">
       <Panel>
-        <div className="flex items-start gap-3">
-          <Receipt className="mt-0.5 text-amber-700 dark:text-amber-300" size={18} aria-hidden />
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">Receipts and expenses</h2>
-            <p className="mt-1 text-sm leading-6 text-fog">
-              Card payments, cash expenses, and work kilometres for {year.label}. A tool over $300 stays out of this total. Add it under Assets for the yearly decline in value.
-            </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Receipt className="mt-0.5 text-amber-700 dark:text-amber-300" size={18} aria-hidden />
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Receipts and expenses</h2>
+              <p className="mt-1 text-sm leading-6 text-fog">
+                Card payments, cash expenses, and work kilometres for {year.label}. A tool over $300 stays out of this total. Add it under Assets for the yearly decline in value.
+              </p>
+            </div>
           </div>
+          <button type="button" className={cx(buttonClass.primary, "shrink-0")} onClick={openNew}>
+            Add expense
+          </button>
         </div>
-        <form ref={formRef} className="mt-4" onSubmit={save} autoComplete="off">
+        {savedNote ? <p className="mt-3 text-sm text-mint">{savedNote}</p> : null}
+      </Panel>
+      {editorOpen ? (
+      <Modal wide title={editorTitle} onClose={closeEditor}>
+        <form onSubmit={save} autoComplete="off">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={form.category === "car" ? "Purpose" : "Description"} required>
               <input
@@ -456,23 +511,47 @@ export function ExpenseManager({
             <p className="mt-3 text-sm text-fog">Under $2 · this gift stays out of the total.</p>
           ) : null}
           {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
-          {savedNote ? <p className="mt-3 text-sm text-mint">{savedNote}</p> : null}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button className={buttonClass.primary} type="submit" disabled={compressing}>
-              {form.id ? "Save expense" : "Add expense"}
-            </button>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
             {form.id ? (
-              <button className={buttonClass.ghost} type="button" onClick={() => setForm(blankForm(year))}>
-                Cancel
-              </button>
+              confirmDelete ? (
+                <button
+                  className={buttonClass.danger}
+                  type="button"
+                  onClick={() => {
+                    onDelete(form.id);
+                    closeEditor();
+                  }}
+                >
+                  Confirm delete
+                </button>
+              ) : (
+                <button className={buttonClass.danger} type="button" onClick={() => setConfirmDelete(true)}>
+                  Delete
+                </button>
+              )
             ) : null}
+            <button className={buttonClass.ghost} type="button" onClick={closeEditor}>
+              Cancel
+            </button>
+            <button className={buttonClass.primary} type="submit" disabled={compressing}>
+              Save
+            </button>
           </div>
         </form>
-      </Panel>
+      </Modal>
+      ) : null}
 
       <div className="space-y-3">
         {expenses.length > 0 ? (
-          <input className={inputClass} placeholder="Search" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <input
+            className={inputClass}
+            placeholder="Search"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOpenMonths(null);
+            }}
+          />
         ) : null}
         {visible.length === 0 ? (
           <Panel>
@@ -481,62 +560,51 @@ export function ExpenseManager({
             </p>
           </Panel>
         ) : (
-          visible.map((expense) => {
-            const open = openId === expense.id;
-            const detail = expense.notes || expense.receiptId;
-            const claimCents = tripClaims.get(expense.id) ?? 0;
+          monthGroups.map(([key, items]) => {
+            const [yearText, monthText] = key.split("-");
+            const label = formatMonth(Number(yearText), Number(monthText) - 1);
+            const cents = items.reduce((sum, expense) => sum + toCents(expense.amount), 0);
+            const open = openMonths ? openMonths.has(key) : searching || key === newestMonth;
             return (
-              <Panel key={expense.id}>
-                <div className="flex items-start justify-between gap-3 px-4 py-3">
-                  <button type="button" className="min-w-0 text-left" onClick={() => load(expense)}>
-                    <p className="text-sm font-semibold">{expense.description}</p>
-                    <p className="mt-1 text-xs text-fog">
-                      {expense.category === "car"
-                        ? `${expense.date.split("-").reverse().join("/")} · ${formatKilometres(expense.kilometres ?? 0)} km · ${vehicleName(expense.vehicle)} · ${expenseStatus(expense, claimCents)}`
-                        : `${expense.date.split("-").reverse().join("/")} · ${formatCents(toCents(expense.amount))} · ${categoryById(expense.category).label}${expense.merchant ? ` · ${expense.merchant}` : ""} · ${expenseStatus(expense, claimCents)}`}
-                    </p>
-                  </button>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    {detail ? (
-                      <button type="button" className="text-xs font-semibold text-mint" onClick={() => setOpenId(open ? null : expense.id)}>
-                        {open ? "Hide" : "Show"}
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-rose"
-                      onClick={() => {
-                        if (pendingDelete === expense.id) onDelete(expense.id);
-                        else setPendingDelete(expense.id);
-                      }}
-                    >
-                      {pendingDelete === expense.id ? "Confirm" : "Delete"}
-                    </button>
-                  </div>
-                </div>
-                {open && detail ? (
-                  <div className="border-t border-line px-4 py-3">
-                    {expense.notes ? <p className="text-sm text-fog">{expense.notes}</p> : null}
-                    {expense.receiptId ? <ReceiptThumb id={expense.receiptId} title={expense.description} onOpen={setViewing} /> : null}
-                  </div>
+              <section key={key} className="panel overflow-hidden rounded-2xl">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                  aria-expanded={open}
+                  onClick={() => toggleMonth(key)}
+                >
+                  <span className="text-sm font-semibold">{label}</span>
+                  <span className="flex items-center gap-2 text-xs text-fog">
+                    {items.length} · {formatCents(cents)}
+                    <ChevronDown size={16} className={cx("shrink-0 transition", open && "rotate-180")} aria-hidden />
+                  </span>
+                </button>
+                {open ? (
+                  <ul className="border-t border-line">
+                    {items.map((expense) => {
+                      const claimCents = tripClaims.get(expense.id) ?? 0;
+                      return (
+                        <li key={expense.id} className="border-b border-line last:border-b-0">
+                          <button type="button" className="w-full px-4 py-2.5 text-left" onClick={() => openExpense(expense)}>
+                            <p className="text-sm font-semibold">{expense.description}</p>
+                            <p className="mt-0.5 text-xs text-fog">
+                              {expense.category === "car"
+                                ? `${expense.date.split("-").reverse().join("/")} · ${formatKilometres(expense.kilometres ?? 0)} km · ${vehicleName(expense.vehicle)} · ${expenseStatus(expense, claimCents)}`
+                                : `${expense.date.split("-").reverse().join("/")} · ${formatCents(toCents(expense.amount))} · ${categoryById(expense.category).label}${expense.merchant ? ` · ${expense.merchant}` : ""} · ${expenseStatus(expense, claimCents)}`}
+                            </p>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 ) : null}
-              </Panel>
+              </section>
             );
           })
         )}
       </div>
       {viewing ? <ReceiptPreview src={viewing.src} title={viewing.title} onClose={() => setViewing(null)} /> : null}
     </div>
-  );
-}
-
-function ReceiptThumb({ id, title, onOpen }: { id: string; title: string; onOpen: (view: { src: string; title: string }) => void }) {
-  const src = useReceipt(id);
-  if (!src) return null;
-  return (
-    <button type="button" className="mt-2 block text-left" onClick={() => onOpen({ src, title: title || "Receipt" })}>
-      <ReceiptBody src={src} compact />
-    </button>
   );
 }
 
