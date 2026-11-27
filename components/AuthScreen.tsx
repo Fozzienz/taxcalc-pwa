@@ -18,7 +18,7 @@ import { supabase, supabaseConfigured } from "@/lib/supabase/client";
 import { clearPasswordRecovery, getVaultKey, passwordRecoveryPending, recoveryHoldActive, setRecoveryHold, setVaultKey, subscribeVault } from "@/lib/vaultSession";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LegalLinks } from "@/components/LegalLinks";
-import { buttonClass, Field, inputClass, Panel } from "@/components/ui";
+import { buttonClass, Field, Panel, TextBox } from "@/components/ui";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -183,16 +183,16 @@ export function AuthScreen() {
         }}
       >
         <Field label="Email">
-          <input className={inputClass} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <TextBox type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </Field>
         {mode === "forgot" ? null : (
           <Field label="Password">
-            <input className={inputClass} type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} />
+            <TextBox type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
         )}
         {mode === "signup" ? (
           <Field label="Confirm password">
-            <input className={inputClass} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+            <TextBox type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
           </Field>
         ) : null}
         {mode === "signup" ? (
@@ -299,13 +299,13 @@ export function AuthScreen() {
           }}
         >
           <Field label="New password">
-            <input className={inputClass} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            <TextBox type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
           <Field label="Confirm password">
-            <input className={inputClass} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+            <TextBox type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
           </Field>
           <Field label="Recovery key">
-            <input className={inputClass} autoComplete="off" value={recoveryInput} onChange={(event) => setRecoveryInput(event.target.value)} />
+            <TextBox autoComplete="off" value={recoveryInput} onChange={(event) => setRecoveryInput(event.target.value)} />
           </Field>
           {error ? <p className="text-sm text-rose">{error}</p> : null}
           {notice ? <p className="text-sm text-fog">{notice}</p> : null}
@@ -328,7 +328,7 @@ export function AuthScreen() {
           }}
         >
           <Field label="Password">
-            <input className={inputClass} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            <TextBox type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
           {error ? <p className="text-sm text-rose">{error}</p> : null}
           <button type="submit" className={buttonClass.primary} disabled={busy}>

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { LogOut, ShieldCheck } from "lucide-react";
 import { DISCLAIMER } from "@/lib/ato-rules";
 import { visibleFinancialYears, workDaysOrDefault } from "@/lib/dates";
+import { isAustralianState } from "@/lib/holidays";
 import { buildSummary } from "@/lib/summary";
 import { useDisplay } from "@/hooks/useDisplay";
 import { startAccountSync, stopAccountSync, useTaxStore } from "@/hooks/useTaxStore";
@@ -60,6 +61,7 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
   const wfhMethod = store.ready && store.yearData.wfhMethod === "actual" ? "actual" : "fixed";
   const yearWfhDays = store.ready ? Object.values(store.yearData.dayLogs).filter((log) => log.mode === "wfh").length : 0;
   const workDays = workDaysOrDefault(store.ready ? store.state.settings.workDays : undefined);
+  const holidayState = store.ready && isAustralianState(store.state.settings.holidayState) ? store.state.settings.holidayState : "QLD";
   useEffect(() => {
     if (!rentalsOn && tab === "rentals") setTab("dashboard");
   }, [rentalsOn, tab]);
@@ -233,34 +235,6 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
       ) : null}
 
       <main id="content" data-section={tab} className="mx-auto mt-6 w-full max-w-6xl flex-1 px-4 sm:px-6">
-        <div className="panel mb-4 flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold">Working from home</p>
-            <p className="mt-1 max-w-xl text-xs leading-5 text-fog">
-              {wfhMethod === "actual"
-                ? "Hours stay as a record. Claim the work share of energy, phone, internet, and stationery instead of 70 cents an hour."
-                : "Hours on the calendar use the 70 cent rate. Energy, phone, internet, and stationery stay out of the claim."}
-            </p>
-          </div>
-          <div className="grid w-full grid-cols-2 gap-1 rounded-lg border border-line bg-ink p-1 sm:w-72 sm:shrink-0" role="group" aria-label="Working from home method">
-            {(
-              [
-                ["fixed", "Fixed rate"],
-                ["actual", "Actual costs"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={wfhMethod === value}
-                className={wfhMethod === value ? "focus-ring w-full rounded-md bg-mint px-3 py-2 text-center text-sm font-semibold text-ink" : "focus-ring w-full rounded-md px-3 py-2 text-center text-sm font-semibold text-fog"}
-                onClick={() => store.ready && store.setWfhMethod(store.year.id, value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
         {tab === "dashboard" ? (
           <Dashboard
             year={store.year}
@@ -278,7 +252,7 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
           />
         ) : null}
         {tab === "calendar" ? (
-          <CalendarView year={store.year} logs={logs} expenses={expenses} wfhMethod={wfhMethod} workDays={workDays} onOpenDay={(date) => setOverlay({ type: "day", date })} />
+          <CalendarView year={store.year} logs={logs} expenses={expenses} wfhMethod={wfhMethod} workDays={workDays} holidayState={holidayState} onOpenDay={(date) => setOverlay({ type: "day", date })} />
         ) : null}
         {tab === "expenses" ? (
           <ExpenseManager
@@ -288,6 +262,11 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
             expenses={expenses}
             draftDate={draftDate}
             editingId={editingId}
+            carMethod={store.yearData.carMethod === "logbook" ? "logbook" : "cents"}
+            logbook={store.yearData.logbook}
+            onCarMethod={(method) => store.setCarMethod(store.year.id, method)}
+            onLogbook={(logbook) => store.setCarLogbook(store.year.id, logbook)}
+            onWfhMethod={(method) => store.setWfhMethod(store.year.id, method)}
             onSave={(expense) => store.saveExpense(store.year.id, expense)}
             onDelete={(id) => store.deleteExpense(store.year.id, id)}
             onDismiss={() => {
@@ -297,7 +276,15 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
           />
         ) : null}
         {tab === "assets" ? (
-          <AssetManager year={store.year} assets={store.state.assets ?? []} onSave={store.saveAsset} onDelete={store.deleteAsset} />
+          <AssetManager
+            year={store.year}
+            assets={store.state.assets ?? []}
+            expenses={expenses}
+            carMethod={store.yearData.carMethod === "logbook" ? "logbook" : "cents"}
+            logbook={store.yearData.logbook}
+            onSave={store.saveAsset}
+            onDelete={store.deleteAsset}
+          />
         ) : null}
         {tab === "rentals" && rentalsOn ? (
           <RentalManager
@@ -364,6 +351,8 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
           onStandardHours={(hours, scope) => store.setStandardHours(store.year.id, hours, scope)}
           workDays={workDays}
           onWorkDays={store.setWorkDays}
+          holidayState={holidayState}
+          onHolidayState={store.setHolidayState}
         />
       ) : null}
       {overlay.type === "account" ? (
@@ -391,6 +380,7 @@ export function AppShell({ changelogVersion = null }: { changelogVersion?: strin
           defaultHours={store.state.settings.defaultWfhHours}
           wfhMethod={wfhMethod}
           workDays={workDays}
+          holidayState={holidayState}
           onClose={() => setOverlay({ type: "none" })}
           onSave={(log) => {
             store.saveDay(store.year.id, log);

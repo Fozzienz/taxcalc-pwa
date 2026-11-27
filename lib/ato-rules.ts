@@ -19,7 +19,7 @@ import { toCents } from "@/lib/money";
  * Gifts must be $2 or more to a deductible gift recipient.
  *
  * Sources: ATO fixed rate method, myTax 2026 other work-related expenses,
- * and the Queensland public holiday tables.
+ * and the state and territory public holiday lists.
  */
 
 export const WFH_CENTS_PER_HOUR = 70;
@@ -106,12 +106,15 @@ export const CATEGORY_HINTS: Record<ExpenseCategory, string> = {
   phone: "The work share of mobile and home phone bills. A 4-week pattern is a common way to set the percentage.",
   internet: "The work share of home and mobile internet. A 4-week pattern is a common way to set the percentage.",
   stationery: "Paper, ink, and other computer consumables, for the work share only.",
+  travel:
+    "Flights, accommodation, and meals for nights away. This is not the drive to your usual workplace, and it is not a meal allowance.",
   car:
-    "Work kilometres in a car you own or lease. TaxTrack multiplies them by the ATO rate for this income year, up to 5,000 km for each car. The rate already covers fuel, registration, insurance, servicing, and decline in value.",
+    "Work kilometres at this year's cents per kilometre rate, up to 5,000 km for each car. Fuel and decline in value are already in the rate. A logbook is the other choice, on Expenses.",
   "tax-affairs":
-    "Tax agent fees are claimed in the year you pay them. That can be the year after the return they relate to.",
+    "Tax agent fees, in the year you pay them. Choose litigation, or other costs of managing your tax affairs. ATO interest is left out.",
   other:
     "Other work expenses that do not fit the categories above. Mark equipment if the $300 asset test should apply.",
+  unsure: "The date, amount, and receipt are kept. The amount stays out of the total until you choose a category.",
 };
 
 export type AssetTreatment = "not-an-asset" | "immediate" | "depreciating";

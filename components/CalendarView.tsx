@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Paperclip } from "lucide-react";
 import { calendarCells, formatLongDate, formatMonth, initialMonth, isUsualWorkDay, monthsOf, WEEKDAYS } from "@/lib/dates";
-import { holidayOn } from "@/lib/holidays";
+import { holidayOn, holidayStateLabel, type AustralianState } from "@/lib/holidays";
 import { formatHours } from "@/lib/money";
 import { modeById, type DayLog, type Expense, type WfhMethod } from "@/lib/types";
 import type { FinancialYear } from "@/lib/ato-rules";
@@ -15,6 +15,7 @@ export function CalendarView({
   expenses,
   wfhMethod,
   workDays,
+  holidayState,
   onOpenDay,
 }: {
   year: FinancialYear;
@@ -22,6 +23,7 @@ export function CalendarView({
   expenses: Expense[];
   wfhMethod: WfhMethod;
   workDays: readonly number[];
+  holidayState: AustralianState;
   onOpenDay: (date: string) => void;
 }) {
   const months = monthsOf(year.start, year.end);
@@ -44,7 +46,8 @@ export function CalendarView({
     if (!expense.date.startsWith(prefix)) continue;
     expensesByDate.set(expense.date, (expensesByDate.get(expense.date) ?? 0) + 1);
   }
-  const holidayCount = cells.filter((cell) => cell && holidayOn(cell.iso)).length;
+  const holidayCount = cells.filter((cell) => cell && holidayOn(cell.iso, holidayState)).length;
+  const stateName = holidayStateLabel(holidayState);
 
   return (
     <div className="space-y-4">
@@ -110,7 +113,7 @@ export function CalendarView({
         <ul className="mt-4 flex flex-wrap gap-2 text-[11px] text-fog">
           <Legend swatch="bg-black/30 border border-line" label="Usual day off" />
           <Legend swatch="bg-rose/20 border border-rose/50" label="National holiday" />
-          <Legend swatch="bg-gold/20 border border-gold/50" label="Queensland holiday" />
+          <Legend swatch="bg-gold/20 border border-gold/50" label={`${stateName} holiday`} />
           <Legend swatch="bg-mint/20 border border-mint/50" label="Work from home" />
           <Legend swatch="bg-sky/20 border border-sky/40" label="Office" />
           <Legend swatch="bg-rose/10 border border-rose/30" label="Leave" />
@@ -118,7 +121,7 @@ export function CalendarView({
           <Legend swatch="bg-paper/10 border border-line" label="Not working" />
         </ul>
         <p className="mt-3 text-xs leading-5 text-fog">
-          A usual work day with nothing logged is an office day. It does not add hours. Days outside your usual week are shaded. Open any day to log what you actually did. Mark Not working for time between jobs. Public holidays stay empty, including the Brisbane Ekka holiday. Other Queensland show holidays are not listed.
+          A usual work day with nothing logged is an office day. It does not add hours. Days outside your usual week are shaded. Open any day to log what you actually did. Mark Not working for time between jobs. Public holidays for {stateName} stay empty. A holiday only in part of the state, such as a show day, is marked. The state is set in the menu.
         </p>
 
         <div className="mt-4 grid grid-cols-7 gap-1">
@@ -132,7 +135,7 @@ export function CalendarView({
           })}
           {cells.map((cell, index) => {
             if (!cell) return <div key={`empty-${index}`} />;
-            const holiday = holidayOn(cell.iso);
+            const holiday = holidayOn(cell.iso, holidayState);
             const offDay = !isUsualWorkDay(cell.iso, workDays);
             const log = logs[cell.iso];
             const assumedOffice = !log && !offDay && !holiday;
@@ -142,7 +145,7 @@ export function CalendarView({
                 key={cell.iso}
                 type="button"
                 onClick={() => onOpenDay(cell.iso)}
-                aria-label={dayLabel(cell.iso, log, expenseCount, assumedOffice, offDay)}
+                aria-label={dayLabel(cell.iso, log, expenseCount, assumedOffice, offDay, holidayState, stateName)}
                 className={cx(
                   "focus-ring flex h-[4.5rem] flex-col rounded-xl border p-1 text-left sm:h-28 sm:p-2",
                   holiday
@@ -159,7 +162,7 @@ export function CalendarView({
                   <span className="font-mono text-xs sm:text-sm">{cell.day}</span>
                   {holiday ? (
                     <span className={cx("rounded px-1 text-[9px] font-semibold", holiday.scope === "national" ? "text-rose" : "text-gold")}>
-                      {holiday.partDay ? "6pm" : holiday.scope === "national" ? "AU" : "QLD"}
+                      {holiday.partDay ? "pm" : holiday.scope === "national" ? "AU" : holidayState}
                     </span>
                   ) : null}
                 </span>
@@ -218,10 +221,10 @@ function todayIso(): string {
   return `${today.getFullYear()}-${month}-${day}`;
 }
 
-function dayLabel(iso: string, log: DayLog | undefined, expenseCount: number, assumedOffice: boolean, offDay: boolean): string {
+function dayLabel(iso: string, log: DayLog | undefined, expenseCount: number, assumedOffice: boolean, offDay: boolean, holidayState: AustralianState, stateName: string): string {
   const parts = [formatLongDate(iso)];
-  const holiday = holidayOn(iso);
-  if (holiday) parts.push(`${holiday.scope === "national" ? "National" : "Queensland"} public holiday, ${holiday.name}`);
+  const holiday = holidayOn(iso, holidayState);
+  if (holiday) parts.push(`${holiday.scope === "national" ? "National" : stateName} public holiday, ${holiday.name}`);
   else if (offDay) parts.push("Not a usual work day");
   if (log) {
     parts.push(log.mode === "wfh" ? `${modeById(log.mode).label}, ${formatHours(log.hours)} hours` : modeById(log.mode).label);

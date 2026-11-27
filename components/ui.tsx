@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ChangeEvent, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { X } from "lucide-react";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
@@ -21,6 +21,91 @@ export const buttonClass = {
 
 export function Panel({ children, className }: { children: ReactNode; className?: string }) {
   return <section className={cx("panel rounded-2xl p-4 sm:p-5", className)}>{children}</section>;
+}
+
+function emptyChange(): ChangeEvent<HTMLInputElement> {
+  return { target: { value: "" }, currentTarget: { value: "" } } as ChangeEvent<HTMLInputElement>;
+}
+
+function emptyAreaChange(): ChangeEvent<HTMLTextAreaElement> {
+  return { target: { value: "" }, currentTarget: { value: "" } } as ChangeEvent<HTMLTextAreaElement>;
+}
+
+function ClearControl({ label, onClick, tall = false }: { label: string; onClick: () => void; tall?: boolean }) {
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      aria-label={label}
+      className={cx(
+        "focus-ring absolute right-1 flex size-8 items-center justify-center rounded-lg text-fog hover:text-paper",
+        tall ? "top-1.5" : "top-1/2 -translate-y-1/2",
+      )}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={onClick}
+    >
+      <X size={14} />
+    </button>
+  );
+}
+
+export function TextBox({
+  value,
+  onChange,
+  onClear,
+  className,
+  type,
+  clearLabel = "Clear",
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { onClear?: () => void; clearLabel?: string }) {
+  const text = value == null ? "" : String(value);
+  const show = text.length > 0 && type !== "date" && type !== "file" && type !== "checkbox" && type !== "radio";
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        type={type}
+        value={value}
+        onChange={onChange}
+        className={cx(inputClass, type === "number" && "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none", show && "pr-10", className)}
+      />
+      {show ? (
+        <ClearControl
+          label={clearLabel}
+          onClick={() => {
+            if (onClear) onClear();
+            else onChange?.(emptyChange());
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function TextArea({
+  value,
+  onChange,
+  onClear,
+  className,
+  clearLabel = "Clear",
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { onClear?: () => void; clearLabel?: string }) {
+  const text = value == null ? "" : String(value);
+  return (
+    <div className="relative">
+      <textarea {...props} value={value} onChange={onChange} className={cx(inputClass, "min-h-24 py-2", text.length > 0 && "pr-10", className)} />
+      {text.length > 0 ? (
+        <ClearControl
+          tall
+          label={clearLabel}
+          onClick={() => {
+            if (onClear) onClear();
+            else onChange?.(emptyAreaChange());
+          }}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 export function Field({

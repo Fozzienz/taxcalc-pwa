@@ -6,7 +6,7 @@ import type { FinancialYear } from "@/lib/ato-rules";
 import { formatMonth, isRealIsoDate, isWithin } from "@/lib/dates";
 import { formatCents, toCents } from "@/lib/money";
 import { isRentalIncome, RENTAL_EXPENSE_CATEGORIES, RENTAL_INCOME_CATEGORIES, rentalCategoryById, type RentalCategory, type RentalExpense, type RentalProperty } from "@/lib/types";
-import { buttonClass, cx, Field, inputClass, Modal, Panel } from "@/components/ui";
+import { buttonClass, cx, Field, inputClass, Modal, Panel, TextBox } from "@/components/ui";
 
 export function RentalManager({
   year,
@@ -154,8 +154,7 @@ export function RentalManager({
             }}
           >
             <Field label="Street">
-              <input
-                className={inputClass}
+              <TextBox
                 name="address-line1"
                 autoComplete="section-rental address-line1"
                 value={street}
@@ -163,8 +162,7 @@ export function RentalManager({
               />
             </Field>
             <Field label="Suburb">
-              <input
-                className={inputClass}
+              <TextBox
                 name="address-level2"
                 autoComplete="section-rental address-level2"
                 value={suburb}
@@ -188,8 +186,7 @@ export function RentalManager({
                 </select>
               </Field>
               <Field label="Postcode">
-                <input
-                  className={inputClass}
+                <TextBox
                   name="postal-code"
                   autoComplete="section-rental postal-code"
                   inputMode="numeric"
@@ -223,7 +220,7 @@ export function RentalManager({
             }}
           >
             <Field label="Address">
-              <input className={inputClass} value={renameValue} onChange={(event) => setRenameValue(event.target.value)} />
+              <TextBox value={renameValue} onChange={(event) => setRenameValue(event.target.value)} />
             </Field>
             <div className="flex flex-wrap gap-2">
               <button type="submit" className={buttonClass.primary}>
@@ -275,7 +272,7 @@ export function RentalManager({
                   <input className={inputClass} type="date" required min={year.start} max={year.end} value={date} onChange={(event) => setDate(event.target.value)} />
                 </Field>
                 <Field label="Amount" required>
-                  <input className={inputClass} inputMode="decimal" required value={amount} placeholder="0.00" onChange={(event) => setAmount(event.target.value)} />
+                  <TextBox inputMode="decimal" required value={amount} placeholder="0.00" onChange={(event) => setAmount(event.target.value)} />
                 </Field>
                 <Field label="Record">
                   <select
@@ -301,11 +298,11 @@ export function RentalManager({
                   </select>
                 </Field>
                 <Field label="Description" hint="Optional. The category name is used if you leave this blank.">
-                  <input className={inputClass} maxLength={160} value={description} onChange={(event) => setDescription(event.target.value)} />
+                  <TextBox maxLength={160} value={description} onChange={(event) => setDescription(event.target.value)} />
                 </Field>
               </div>
               <Field label="Notes">
-                <input className={inputClass} value={notes} onChange={(event) => setNotes(event.target.value)} />
+                <TextBox value={notes} onChange={(event) => setNotes(event.target.value)} />
               </Field>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className={buttonClass.primary} onClick={saveExpense}>

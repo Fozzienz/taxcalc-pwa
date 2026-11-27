@@ -222,8 +222,8 @@ export function Dashboard({
             {summary.wfhMethod === "actual" ? "ATO actual cost method" : "ATO fixed rate method"}
           </a>
           {" · "}
-          <a className="text-mint underline decoration-mint/40 underline-offset-2" href="https://www.qld.gov.au/recreation/travel/holidays/public" target="_blank" rel="noopener noreferrer">
-            Queensland public holidays
+          <a className="text-mint underline decoration-mint/40 underline-offset-2" href="https://www.fairwork.gov.au/employment-conditions/public-holidays" target="_blank" rel="noopener noreferrer">
+            Public holidays
           </a>
         </p>
       </Panel>

@@ -97,17 +97,30 @@ export function depreciationForPeriod(asset: DepreciatingAsset, start: string): 
   return depreciationSchedule(asset).find((row) => row.start === start);
 }
 
+/** This year's claim. A logbook car uses that year's work-use share instead of the stored percentage. */
+export function assetYearClaim(
+  asset: DepreciatingAsset,
+  yearStart: string,
+  car?: { applies: boolean; share: number | null },
+): number {
+  const row = depreciationForPeriod(asset, yearStart);
+  if (!row) return 0;
+  if (!asset.logbookCar) return row.claimCents;
+  if (!car?.applies || car.share == null) return 0;
+  return Math.round(row.declineCents * car.share);
+}
+
 export function summariseDecline(
   assets: readonly DepreciatingAsset[],
   year: { start: string },
+  car?: { applies: boolean; share: number | null },
 ): { cents: number; dollars: number; rows: Array<{ id: string; description: string; claimCents: number; method: string }> } {
   const rows = assets.map((asset) => {
-    const claim = depreciationForPeriod(asset, year.start);
     return {
       id: asset.id,
       description: asset.description,
-      claimCents: claim?.claimCents ?? 0,
-      method: depreciationMethodLabel(asset),
+      claimCents: assetYearClaim(asset, year.start, car),
+      method: asset.logbookCar ? "Logbook car" : depreciationMethodLabel(asset),
     };
   });
   const cents = rows.reduce((sum, row) => sum + row.claimCents, 0);

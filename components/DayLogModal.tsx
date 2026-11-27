@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { Building2, CircleOff, Coffee, Flag, Home, MapPin, Paperclip, TreePalm } from "lucide-react";
-import { holidayOn } from "@/lib/holidays";
+import { holidayOn, holidayStateLabel, type AustralianState } from "@/lib/holidays";
 import { formatCents, formatHours, toCents } from "@/lib/money";
 import { formatLongDate, isUsualWorkDay } from "@/lib/dates";
 import { isValidHours } from "@/lib/dates";
 import { modeById, WORK_MODES, type DayLog, type Expense, type WfhMethod, type WorkMode } from "@/lib/types";
-import { buttonClass, cx, Field, inputClass, Modal } from "@/components/ui";
+import { buttonClass, cx, Field, Modal, TextArea, TextBox } from "@/components/ui";
 
 const MODE_ICONS = {
   wfh: Home,
@@ -24,6 +24,7 @@ export function DayLogModal({
   defaultHours,
   wfhMethod,
   workDays,
+  holidayState,
   onSave,
   onClear,
   onClose,
@@ -35,12 +36,13 @@ export function DayLogModal({
   defaultHours: number;
   wfhMethod: WfhMethod;
   workDays: readonly number[];
+  holidayState: AustralianState;
   onSave: (log: DayLog) => void;
   onClear: () => void;
   onClose: () => void;
   onAddExpense: () => void;
 }) {
-  const holiday = holidayOn(date);
+  const holiday = holidayOn(date, holidayState);
   const [mode, setMode] = useState<WorkMode>(existing?.mode ?? (holiday || !isUsualWorkDay(date, workDays) ? "wfh" : "office"));
   const [hours, setHours] = useState(existing?.mode === "wfh" ? String(existing.hours) : String(defaultHours));
   const [notes, setNotes] = useState(existing?.notes ?? "");
@@ -77,7 +79,7 @@ export function DayLogModal({
           {holiday.scope === "national" ? <Flag size={18} className="mt-0.5 shrink-0 text-rose" /> : <MapPin size={18} className="mt-0.5 shrink-0 text-gold" />}
           <p>
             <span className="block font-medium">
-              {holiday.scope === "national" ? "National public holiday" : "Queensland public holiday"} · {holiday.name}
+              {holiday.scope === "national" ? "National public holiday" : `${holidayStateLabel(holidayState)} public holiday`} · {holiday.name}
             </span>
             {holiday.detail ? <span className="mt-1 block text-fog">{holiday.detail}</span> : null}
             <span className="mt-1 block text-fog">Log hours only if you actually worked.</span>
@@ -113,8 +115,7 @@ export function DayLogModal({
       {mode === "wfh" ? (
         <div className="mt-4">
           <Field label="Hours worked from home" hint={`A standard day is ${formatHours(defaultHours)} hours. Change that in the menu. Use tenths, up to 24.`}>
-            <input
-              className={inputClass}
+            <TextBox
               type="number"
               inputMode="decimal"
               min={0.1}
@@ -129,12 +130,7 @@ export function DayLogModal({
 
       <div className="mt-4">
         <Field label="Note" hint="Optional. A diary of actual hours, not an estimate.">
-          <textarea
-            className={cx(inputClass, "min-h-24 py-2")}
-            maxLength={500}
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-          />
+          <TextArea maxLength={500} value={notes} onChange={(event) => setNotes(event.target.value)} />
         </Field>
       </div>
 

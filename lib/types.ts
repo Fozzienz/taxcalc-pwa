@@ -1,3 +1,5 @@
+import type { AustralianState } from "@/lib/holidays";
+
 export type YearId = "2025-26" | "2026-27" | "2027-28";
 
 export type WorkMode = "wfh" | "office" | "leave" | "rdo" | "not-working";
@@ -13,17 +15,41 @@ export type ExpenseCategory =
   | "phone"
   | "internet"
   | "stationery"
+  | "travel"
   | "car"
   | "tax-affairs"
-  | "other";
+  | "other"
+  | "unsure";
 
 export type WfhMethod = "fixed" | "actual";
+
+/** Missing means cents per kilometre. Chosen for this income year. */
+export type CarMethod = "cents" | "logbook";
+
+export type CarCostKind = "fuel" | "registration" | "insurance" | "service" | "other";
+
+export type TripPurpose = "work" | "self-education";
+
+export interface CarLogbook {
+  /** First day of the 12 continuous weeks. */
+  started: string;
+  openingKilometres: number;
+  /** Empty until the logbook period ends. */
+  closingKilometres: number | null;
+}
 
 export function isRunningCost(category: ExpenseCategory): boolean {
   return category === "energy" || category === "phone" || category === "internet" || category === "stationery";
 }
 
 export type PaymentMethod = "card" | "cash" | "other";
+
+export type TaxAffair = "litigation" | "other";
+
+/** Donations, laundry, car rows, and an unlabelled receipt are not split with home. */
+export function canShareWork(category: ExpenseCategory): boolean {
+  return category !== "donations" && category !== "laundry" && category !== "car" && category !== "unsure";
+}
 
 export type RentalCategory =
   | "rent"
@@ -65,10 +91,22 @@ export interface Expense {
   dgrConfirmed: boolean;
   isEquipment: boolean;
   workUsePercent: number;
+  /** Work dollars when the private share is an amount. Missing means use the percentage. */
+  workAmount?: number;
+  /** Missing means other costs of managing tax affairs. */
+  taxAffair?: TaxAffair;
   /** Work kilometres when the category is car. Null for every other expense. */
   kilometres: number | null;
   /** Which car the kilometres belong to. Blank means one car. */
   vehicle: string;
+  /** A logbook running cost. Missing means a trip. */
+  carRecord?: "trip" | "cost";
+  carCost?: CarCostKind;
+  tripFrom?: string;
+  tripTo?: string;
+  tripPurpose?: TripPurpose;
+  /** How many times this same trip was made. Missing means once. */
+  tripTimes?: number;
   /** Key for a compressed JPEG kept in this browser. Null when no photo is attached. */
   receiptId: string | null;
 }
@@ -85,6 +123,8 @@ export interface DepreciatingAsset {
   workUsePercent: number;
   method: DepreciationMethod;
   notes: string;
+  /** This asset is the car. The year's logbook sets the work use. */
+  logbookCar?: boolean;
 }
 export interface RentalProperty {
   id: string;
@@ -107,6 +147,9 @@ export interface YearData {
   rentalExpenses?: RentalExpense[];
   /** Missing means the fixed rate. Chosen for this income year. */
   wfhMethod?: WfhMethod;
+  /** Missing means cents per kilometre. Chosen for this income year. */
+  carMethod?: CarMethod;
+  logbook?: CarLogbook;
 }
 
 export interface AppState {
@@ -118,6 +161,8 @@ export interface AppState {
     rentalProperties?: boolean;
     /** 0 is Sunday and 6 is Saturday. Missing means Monday to Friday. */
     workDays?: number[];
+    /** Missing means Queensland. Public holidays on the calendar follow this. */
+    holidayState?: AustralianState;
   };
   properties?: RentalProperty[];
   assets?: DepreciatingAsset[];
@@ -141,9 +186,11 @@ export const CATEGORIES: readonly CategoryDefinition[] = [
   { id: "phone", label: "Phone", official: "Other work-related expenses" },
   { id: "internet", label: "Internet", official: "Other work-related expenses" },
   { id: "stationery", label: "Stationery and consumables", official: "Other work-related expenses" },
-  { id: "car", label: "Car (cents per km)", official: "Work-related car expenses" },
+  { id: "travel", label: "Work-related travel", official: "Work-related travel expenses" },
+  { id: "car", label: "Car", official: "Work-related car expenses" },
   { id: "tax-affairs", label: "Tax agent fees", official: "Cost of managing tax affairs" },
   { id: "other", label: "Other work expenses", official: "Other work-related expenses" },
+  { id: "unsure", label: "Not sure yet", official: "Not in the total" },
 ] as const;
 
 export const WORK_MODES: readonly {

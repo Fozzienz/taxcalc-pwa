@@ -38,10 +38,10 @@ const TOPICS: { id: string; title: string; body: string[] }[] = [
     id: "working-from-home",
     title: "Working from home",
     body: [
-      "The ATO lets you use one method for an income year. Fixed rate, or actual costs. Use the switch at the top of TaxTrack. Do not add 70 cents an hour on top of the same power, phone, internet, or stationery bills.",
+      "The ATO lets you use one method for an income year. Fixed rate, or actual costs. Use the Working from home switch on Expenses. The question mark beside it explains both methods. Do not add 70 cents an hour on top of the same power, phone, internet, or stationery bills.",
       "Fixed rate. The ATO allows 70 cents for each hour you actually worked from home. TaxTrack multiplies the hours on the calendar by 70 cents, then drops the cents. Ten hours is $7. That rate is allowed to stand in for electricity and gas, phone, internet, and stationery and computer consumables. Keep at least one of those bills. Leave the bills out of Expenses, because the rate already covers them. The hours must be hours you worked, not a guess. A desk, computer, or other asset is still claimed on its own, under Assets.",
       "Actual costs. The ATO allows the work share of what you actually paid, instead of 70 cents an hour. The hours on the calendar are only the record that you worked from home. They do not become dollars. On Expenses, add each bill under Electricity and gas, Phone, Internet, or Stationery and consumables, and set Work use %. A $420 power bill at 15% work use is a $63 claim. Phone, internet, and stationery use the same step. A four-week pattern of your work calls and data is a common way to choose the phone and internet percentage. Keep each bill.",
-      "TaxTrack does not include rent, mortgage interest, or council rates on your own home in either method. Usual working days are set in the menu. A usual day with nothing logged is an office day, and it does not add hours. Other days are shaded, and any day can still be changed. Mark Not working for a day you were not employed, such as between jobs. A standard day is set in the menu. Saving a new standard asks whether it applies to new days, or to work-from-home days already logged in that year. National public holidays and Queensland public holidays stay empty, including the Brisbane Ekka holiday. For 2027–28, confirm the hourly rate with the ATO before you lodge. That year appears in the list from 1 July 2027.",
+      "TaxTrack does not include rent, mortgage interest, or council rates on your own home in either method. Usual working days are set in the menu. A usual day with nothing logged is an office day, and it does not add hours. Other days are shaded, and any day can still be changed. Mark Not working for a day you were not employed, such as between jobs. A standard day is set in the menu. Saving a new standard asks whether it applies to new days, or to work-from-home days already logged in that year. National public holidays, and the public holidays for the state or territory you choose in the menu, stay empty. A holiday only in part of that state, such as the Brisbane Ekka, is marked. For 2027–28, confirm the hourly rate with the ATO before you lodge. That year appears in the list from 1 July 2027.",
     ],
   },
   {
@@ -51,8 +51,23 @@ const TOPICS: { id: string; title: string; body: string[] }[] = [
   },
   {
     id: "car-kilometres",
-    title: "Car kilometres",
-    body: ["On Expenses, choose Car (cents per km). Enter the work kilometres and TaxTrack multiplies them by the ATO rate for that income year: 88 cents in 2025–26 and 91 cents in 2026–27. The claim stops at 5,000 km for each car. The rate already covers fuel, registration, insurance, servicing, and decline in value. Keep a note of how you worked out the kilometres. Trips between home and your regular workplace are not included."],
+    title: "Car expenses",
+    body: [
+      "On Expenses, choose Car. The Car switch on that page is for the whole income year: cents per kilometre, or a logbook. One car cannot use both in the same year.",
+      "Cents per kilometre multiplies the work kilometres by the ATO rate: 88 cents in 2025–26 and 91 cents in 2026–27. The claim stops at 5,000 km for each car. The rate already covers fuel, registration, insurance, servicing, and decline in value.",
+      "A logbook needs a start date, the opening odometer, each work trip, and the closing odometer after at least 12 continuous weeks. Work use is the work kilometres divided by all the kilometres in those weeks. A fuel receipt is claimed at that percentage. Trips do not add a dollar amount. Mark the car under Assets and the same percentage is used for decline in value. A past trip can be chosen again from the list in the trip box. The question mark beside Car explains both methods.",
+      "Keep a note of how you worked the kilometres out. Trips between home and your regular workplace are not included. A trip from home or work to a course and back can be self-education. A trip that continues on to work or home after the course is not.",
+    ],
+  },
+  {
+    id: "other-expenses",
+    title: "Travel, shares, and tax fees",
+    body: [
+      "Work-related travel is for nights away: flights, accommodation, and meals you paid. It is not the drive to your usual workplace, and TaxTrack does not invent a meal allowance.",
+      "An expense that was partly private can use a work percentage, or the work dollars. Fully work expenses stay on all of it. Donations, laundry, and car trips stay as they are. A logbook fuel bill is the full bill. The logbook percentage is applied when the claim is worked out.",
+      "Tax agent fees are either litigation, or other costs of managing your tax affairs. ATO interest is left out. The ATO prefills that.",
+      "Not sure yet keeps the date, the amount, and the receipt. The amount stays out of the total until you choose a real category.",
+    ],
   },
   {
     id: "totals",

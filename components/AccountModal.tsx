@@ -15,7 +15,7 @@ import {
 import { unlockVaultWithPassword } from "@/lib/crypto/vaultCrypto";
 import { supabase, supabaseConfigured } from "@/lib/supabase/client";
 import { clearPasswordRecovery, getVaultKey, passwordRecoveryPending, setVaultKey, subscribeVault } from "@/lib/vaultSession";
-import { buttonClass, Field, inputClass, Modal } from "@/components/ui";
+import { buttonClass, Field, Modal, TextBox } from "@/components/ui";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -215,13 +215,13 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
         <p className="text-sm leading-6 text-fog">The reset link signed you in. Enter a new password and the recovery key from when the account was created.</p>
         <div className="mt-4 grid gap-3">
           <Field label="New password">
-            <input className={inputClass} type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            <TextBox type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
           <Field label="Confirm password">
-            <input className={inputClass} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+            <TextBox type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
           </Field>
           <Field label="Recovery key">
-            <input className={inputClass} autoComplete="off" value={recoveryInput} onChange={(event) => setRecoveryInput(event.target.value)} />
+            <TextBox autoComplete="off" value={recoveryInput} onChange={(event) => setRecoveryInput(event.target.value)} />
           </Field>
         </div>
         {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
@@ -245,7 +245,7 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
           }}
         >
           <Field label="Password">
-            <input className={inputClass} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            <TextBox type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
           </Field>
           {error ? <p className="text-sm text-rose">{error}</p> : null}
           <button type="submit" className={buttonClass.primary} disabled={busy}>
@@ -274,13 +274,13 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
             }}
           >
             <Field label="Current password">
-              <input className={inputClass} type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+              <TextBox type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
             </Field>
             <Field label="New password">
-              <input className={inputClass} type="password" autoComplete="new-password" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} />
+              <TextBox type="password" autoComplete="new-password" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} />
             </Field>
             <Field label="Confirm new password">
-              <input className={inputClass} type="password" autoComplete="new-password" value={confirmNext} onChange={(event) => setConfirmNext(event.target.value)} />
+              <TextBox type="password" autoComplete="new-password" value={confirmNext} onChange={(event) => setConfirmNext(event.target.value)} />
             </Field>
             <p className="text-xs leading-5 text-fog">The recovery key does not change. Forgot password still asks for it.</p>
             <button type="submit" className={buttonClass.primary} disabled={busy}>
@@ -354,12 +354,11 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
         }}
       >
         <Field label="Email">
-          <input className={inputClass} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          <TextBox type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </Field>
         {mode === "forgot" ? null : (
           <Field label="Password">
-            <input
-              className={inputClass}
+            <TextBox
               type="password"
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
               value={password}
@@ -369,7 +368,7 @@ export function AccountModal({ onClose }: { onClose: () => void }) {
         )}
         {mode === "signup" ? (
           <Field label="Confirm password">
-            <input className={inputClass} type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+            <TextBox type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
           </Field>
         ) : null}
         {error ? <p className="text-sm text-rose">{error}</p> : null}
