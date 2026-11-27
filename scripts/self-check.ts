@@ -452,8 +452,8 @@ assert(legacyExpense.ok && legacyExpense.data.years["2025-26"].expenses[0]?.kilo
 const changelog = parseChangelog("## [Unreleased]\n\n### Added\n\n- 2026-11-13 — Rental properties\n");
 assert(changelog.releases[0]?.version === "Unreleased" && changelog.releases[0].subsections[0]?.items[0]?.date === "2026-11-13", "the changelog keeps the date on each item");
 const published = readChangelog().releases.filter((release) => release.version !== "Unreleased");
-assert(published.some((release) => release.version === "0.6.0"), "the published changelog has the production version");
-assert(latestPublishedVersion(published) === "0.6.0", "the bell follows the latest published changelog");
+assert(published.some((release) => release.version === "0.7.0"), "the published changelog has the production version");
+assert(latestPublishedVersion(published) === "0.7.0", "the bell follows the latest published changelog");
 assert(
   published.every((release) => release.subsections.every((subsection) => subsection.items.every((item) => !item.date && item.text.length < 90))),
   "published changelog bullets are short and undated",

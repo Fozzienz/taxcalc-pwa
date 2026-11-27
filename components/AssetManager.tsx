@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Laptop } from "lucide-react";
+import { ChevronDown, Laptop } from "lucide-react";
 import type { FinancialYear } from "@/lib/ato-rules";
+import { formatMonth } from "@/lib/dates";
 import { depreciationMethodLabel, depreciationSchedule, isImmediateAsset } from "@/lib/depreciation";
 import { formatCents, toCents } from "@/lib/money";
 import type { DepreciatingAsset, DepreciationMethod } from "@/lib/types";
-import { buttonClass, Field, inputClass, Panel } from "@/components/ui";
+import { buttonClass, cx, Field, inputClass, Modal, Panel } from "@/components/ui";
 
 function todayIso(): string {
   const now = new Date();
@@ -42,9 +43,11 @@ export function AssetManager({
   const [price, setPrice] = useState("");
   const [life, setLife] = useState("4");
   const [usePercent, setUsePercent] = useState("100");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [openMonths, setOpenMonths] = useState<Set<string> | null>(null);
   const cost = Number(price);
   const years = Number(life);
   const workUse = Number(usePercent);
@@ -61,7 +64,9 @@ export function AssetManager({
     setPrice(String(asset.cost));
     setLife(String(asset.effectiveLifeYears));
     setUsePercent(String(asset.workUsePercent));
-    setOpenId(asset.id);
+    setError(null);
+    setConfirmDelete(false);
+    setEditorOpen(true);
   }
 
   function clear() {
@@ -69,6 +74,20 @@ export function AssetManager({
     setPrice("");
     setLife("4");
     setUsePercent("100");
+  }
+
+  function openNew() {
+    clear();
+    setError(null);
+    setConfirmDelete(false);
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
+    clear();
+    setError(null);
+    setConfirmDelete(false);
+    setEditorOpen(false);
   }
 
   function save() {
@@ -88,25 +107,56 @@ export function AssetManager({
       return;
     }
     const editing = Boolean(draft.id);
+    const savedMonth = draft.purchased.slice(0, 7);
     onSave(previewAsset);
-    clear();
-    setError(null);
+    closeEditor();
+    setOpenMonths((current) => new Set([...(current ?? []), savedMonth]));
     setSavedNote(editing ? "Asset updated." : "Asset added.");
   }
 
+  const sorted = [...assets].sort((a, b) => b.purchased.localeCompare(a.purchased) || a.description.localeCompare(b.description));
+  const months = new Map<string, DepreciatingAsset[]>();
+  for (const asset of sorted) {
+    const key = /^\d{4}-\d{2}/.test(asset.purchased) ? asset.purchased.slice(0, 7) : "undated";
+    const list = months.get(key) ?? [];
+    list.push(asset);
+    months.set(key, list);
+  }
+  const monthGroups = [...months.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  const newestMonth = monthGroups[0]?.[0] ?? "";
+
+  function toggleMonth(key: string) {
+    setOpenMonths((current) => {
+      const base = current ?? new Set(newestMonth ? [newestMonth] : []);
+      const next = new Set(base);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="space-y-4">
       <Panel>
-        <div className="flex items-start gap-3">
-          <Laptop className="mt-0.5 text-rose-700 dark:text-rose-300" size={18} aria-hidden />
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">Depreciating assets</h2>
-            <p className="mt-1 text-sm leading-6 text-fog">
-              Laptops, tools, and equipment. Over $300, TaxTrack spreads the purchase price over the effective life. $300 or under, used mainly for work, is an immediate deduction in {year.label} when that is the year you first used it.
-            </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Laptop className="mt-0.5 text-rose-700 dark:text-rose-300" size={18} aria-hidden />
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Depreciating assets</h2>
+              <p className="mt-1 text-sm leading-6 text-fog">
+                Laptops, tools, and equipment. Over $300, TaxTrack spreads the purchase price over the effective life. $300 or under, used mainly for work, is an immediate deduction in {year.label} when that is the year you first used it.
+              </p>
+            </div>
           </div>
+          <button type="button" className={`${buttonClass.primary} shrink-0`} onClick={openNew}>
+            Add asset
+          </button>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {savedNote ? <p className="mt-3 text-sm text-mint">{savedNote}</p> : null}
+      </Panel>
+      {editorOpen ? (
+      <Modal wide title={draft.id ? draft.description.trim() || "Edit asset" : "Add asset"} onClose={closeEditor}>
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Description" required>
             <input className={inputClass} value={draft.description} placeholder="Laptop" onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
           </Field>
@@ -141,19 +191,55 @@ export function AssetManager({
             {thisYear ? ` · ${thisYear.daysHeld} days` : ""}
           </p>
         ) : null}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className={buttonClass.primary} onClick={save}>
-            {draft.id ? "Save asset" : "Add asset"}
-          </button>
-          {draft.id ? (
-            <button type="button" className={buttonClass.ghost} onClick={clear}>
-              Cancel
-            </button>
-          ) : null}
-        </div>
+        {preview.length > 0 ? (
+          <table className="mt-3 w-full text-sm">
+            <thead>
+              <tr className="text-xs text-fog">
+                <th className="pb-2 text-left font-semibold">Income year</th>
+                <th className="pb-2 text-right font-semibold">Days</th>
+                <th className="pb-2 text-right font-semibold">Claim</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.map((row) => (
+                <tr key={row.start} className={row.start === year.start ? "text-mint" : undefined}>
+                  <td className="py-1">{row.label}</td>
+                  <td className="py-1 text-right font-mono">{row.daysHeld}</td>
+                  <td className="py-1 text-right font-mono">{formatCents(row.claimCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
         {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
-        {savedNote ? <p className="mt-3 text-sm text-mint">{savedNote}</p> : null}
-      </Panel>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {draft.id ? (
+            confirmDelete ? (
+              <button
+                type="button"
+                className={buttonClass.danger}
+                onClick={() => {
+                  onDelete(draft.id);
+                  closeEditor();
+                }}
+              >
+                Confirm delete
+              </button>
+            ) : (
+              <button type="button" className={buttonClass.danger} onClick={() => setConfirmDelete(true)}>
+                Delete
+              </button>
+            )
+          ) : null}
+          <button type="button" className={buttonClass.ghost} onClick={closeEditor}>
+            Cancel
+          </button>
+          <button type="button" className={buttonClass.primary} onClick={save}>
+            Save
+          </button>
+        </div>
+      </Modal>
+      ) : null}
 
       <div className="space-y-3">
         {assets.length === 0 ? (
@@ -161,53 +247,46 @@ export function AssetManager({
             <p className="text-sm text-fog">No assets yet. A tool over $300 logged under Expenses stays out of that total until you add it here.</p>
           </Panel>
         ) : (
-          assets.map((asset) => {
-            const schedule = depreciationSchedule(asset);
-            const open = openId === asset.id;
-            const current = schedule.find((row) => row.start === year.start);
+          monthGroups.map(([key, items]) => {
+            const [yearText, monthText] = key.split("-");
+            const label = key === "undated" ? "Undated" : formatMonth(Number(yearText), Number(monthText) - 1);
+            const cents = items.reduce((sum, asset) => sum + toCents(asset.cost), 0);
+            const open = openMonths ? openMonths.has(key) : key === newestMonth;
             return (
-              <Panel key={asset.id}>
-                <div className="flex items-start justify-between gap-3 px-4 py-3">
-                  <button type="button" className="min-w-0 text-left" onClick={() => load(asset)}>
-                    <p className="text-sm font-semibold">{asset.description}</p>
-                    <p className="mt-1 text-xs text-fog">
-                      {asset.purchased.split("-").reverse().join("/")} · {formatCents(toCents(asset.cost))} · {depreciationMethodLabel(asset)}
-                      {isImmediateAsset(asset.cost, asset.workUsePercent) ? "" : ` · ${asset.effectiveLifeYears}y`}
-                      {current ? ` · ${year.label} ${formatCents(current.claimCents)}` : ""}
-                    </p>
-                  </button>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <button type="button" className="text-xs font-semibold text-mint" onClick={() => setOpenId(open ? null : asset.id)}>
-                      {open ? "Hide" : "Show"}
-                    </button>
-                    <button type="button" className="text-xs font-semibold text-rose" onClick={() => onDelete(asset.id)}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
+              <section key={key} className="panel overflow-hidden rounded-2xl">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                  aria-expanded={open}
+                  onClick={() => toggleMonth(key)}
+                >
+                  <span className="text-sm font-semibold">{label}</span>
+                  <span className="flex items-center gap-2 text-xs text-fog">
+                    {items.length} · {formatCents(cents)}
+                    <ChevronDown size={16} className={cx("shrink-0 transition", open && "rotate-180")} aria-hidden />
+                  </span>
+                </button>
                 {open ? (
-                  <div className="border-t border-line px-4 py-3">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-xs text-fog">
-                          <th className="pb-2 text-left font-semibold">Income year</th>
-                          <th className="pb-2 text-right font-semibold">Days</th>
-                          <th className="pb-2 text-right font-semibold">Claim</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {schedule.map((row) => (
-                          <tr key={row.start} className={row.start === year.start ? "text-mint" : undefined}>
-                            <td className="py-1">{row.label}</td>
-                            <td className="py-1 text-right font-mono">{row.daysHeld}</td>
-                            <td className="py-1 text-right font-mono">{formatCents(row.claimCents)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <ul className="border-t border-line">
+                    {items.map((asset) => {
+                      const schedule = depreciationSchedule(asset);
+                      const current = schedule.find((row) => row.start === year.start);
+                      return (
+                        <li key={asset.id} className="border-b border-line last:border-b-0">
+                          <button type="button" className="w-full px-4 py-2.5 text-left" onClick={() => load(asset)}>
+                            <p className="text-sm font-semibold">{asset.description}</p>
+                            <p className="mt-0.5 text-xs text-fog">
+                              {asset.purchased.split("-").reverse().join("/")} · {formatCents(toCents(asset.cost))} · {depreciationMethodLabel(asset)}
+                              {isImmediateAsset(asset.cost, asset.workUsePercent) ? "" : ` · ${asset.effectiveLifeYears}y`}
+                              {current ? ` · ${year.label} ${formatCents(current.claimCents)}` : ""}
+                            </p>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 ) : null}
-              </Panel>
+              </section>
             );
           })
         )}

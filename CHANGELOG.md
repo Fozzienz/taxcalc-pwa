@@ -4,6 +4,13 @@ What’s new in TaxTrack. Plain language only.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-27
+
+### Changed
+
+- An expense or asset opens in a box, ready to edit and save.
+- Expenses, assets, rent, and rental bills sit under each month.
+
 ## [0.6.0] - 2026-11-24
 
 ### Changed
