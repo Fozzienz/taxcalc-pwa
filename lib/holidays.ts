@@ -1,4 +1,17 @@
-export type HolidayScope = "national" | "qld";
+export type AustralianState = "ACT" | "NSW" | "NT" | "QLD" | "SA" | "TAS" | "VIC" | "WA";
+
+export type HolidayScope = "national" | "act" | "nsw" | "nt" | "qld" | "sa" | "tas" | "vic" | "wa";
+
+export const HOLIDAY_STATES: readonly { id: AustralianState; label: string; scope: HolidayScope }[] = [
+  { id: "ACT", label: "Australian Capital Territory", scope: "act" },
+  { id: "NSW", label: "New South Wales", scope: "nsw" },
+  { id: "NT", label: "Northern Territory", scope: "nt" },
+  { id: "QLD", label: "Queensland", scope: "qld" },
+  { id: "SA", label: "South Australia", scope: "sa" },
+  { id: "TAS", label: "Tasmania", scope: "tas" },
+  { id: "VIC", label: "Victoria", scope: "vic" },
+  { id: "WA", label: "Western Australia", scope: "wa" },
+];
 
 export interface Holiday {
   date: string;
@@ -8,87 +21,275 @@ export interface Holiday {
   partDay: boolean;
 }
 
-function holiday(
-  date: string,
-  name: string,
-  scope: HolidayScope,
-  detail?: string,
-  partDay = false,
-): Holiday {
+function holiday(date: string, name: string, scope: HolidayScope, detail?: string, partDay = false): Holiday {
   return { date, name, scope, detail, partDay };
 }
 
 /**
- * Observed Queensland public holidays for 2025, 2026, 2027, and January–June 2028.
- * January–June 2028 covers the rest of the 2027–28 income year. Those dates use the
- * same Holidays Act rules as the published tables: Easter from the Gregorian computus,
- * Labour Day on the first Monday in May, and an extra New Year holiday when 1 January
- * is a weekend.
- * Dates follow the Queensland Government tables. Ekka is Brisbane-area only.
- * Christmas Eve is a part-day holiday from 6pm. Anzac Day moves to Monday
- * only when 25 April is a Sunday. Australia Day moves to Monday when 26 January
- * falls on a weekend. Extra Christmas, Boxing Day, and New Year holidays follow
- * the Holidays Act 1983 when those days fall on a weekend.
+ * Public holidays for 2025 through June 2028, for each state and territory.
+ * National days apply everywhere. A state day applies only in that state.
+ * Dates follow the published state lists. A weekend substitute stays with the
+ * state that grants it. Ekka is Brisbane only, and Melbourne Cup is metropolitan.
  */
 export const HOLIDAYS: readonly Holiday[] = [
   holiday("2025-01-01", "New Year's Day", "national"),
-  holiday("2025-01-27", "Australia Day", "national", "Observed Monday because 26 January is a Sunday."),
+  holiday("2025-01-27", "Australia Day", "national"),
+  holiday("2025-03-03", "Labour Day", "wa"),
+  holiday("2025-03-10", "Canberra Day", "act"),
+  holiday("2025-03-10", "Adelaide Cup Day", "sa"),
+  holiday("2025-03-10", "Eight Hours Day", "tas"),
+  holiday("2025-03-10", "Labour Day", "vic"),
   holiday("2025-04-18", "Good Friday", "national"),
+  holiday("2025-04-19", "Easter Saturday", "act"),
+  holiday("2025-04-19", "Easter Saturday", "nsw"),
+  holiday("2025-04-19", "Easter Saturday", "nt"),
   holiday("2025-04-19", "The day after Good Friday", "qld"),
+  holiday("2025-04-19", "Easter Saturday", "sa"),
+  holiday("2025-04-19", "Easter Saturday", "vic"),
+  holiday("2025-04-20", "Easter Sunday", "act"),
+  holiday("2025-04-20", "Easter Sunday", "nsw"),
+  holiday("2025-04-20", "Easter Sunday", "nt"),
   holiday("2025-04-20", "Easter Sunday", "qld"),
+  holiday("2025-04-20", "Easter Sunday", "sa"),
+  holiday("2025-04-20", "Easter Sunday", "vic"),
+  holiday("2025-04-20", "Easter Sunday", "wa"),
   holiday("2025-04-21", "Easter Monday", "national"),
   holiday("2025-04-25", "Anzac Day", "national"),
+  holiday("2025-05-05", "May Day", "nt"),
   holiday("2025-05-05", "Labour Day", "qld"),
+  holiday("2025-06-02", "Reconciliation Day", "act"),
+  holiday("2025-06-02", "Western Australia Day", "wa"),
+  holiday("2025-06-09", "King's Birthday", "act"),
+  holiday("2025-06-09", "King's Birthday", "nsw"),
+  holiday("2025-06-09", "King's Birthday", "nt"),
+  holiday("2025-06-09", "King's Birthday", "sa"),
+  holiday("2025-06-09", "King's Birthday", "tas"),
+  holiday("2025-06-09", "King's Birthday", "vic"),
+  holiday("2025-08-04", "Picnic Day", "nt"),
   holiday("2025-08-13", "Royal Queensland Show (Ekka)", "qld", "Brisbane area only. Not a statewide public holiday."),
+  holiday("2025-09-26", "Friday before AFL Grand Final", "vic"),
+  holiday("2025-09-29", "King's Birthday", "wa"),
+  holiday("2025-10-06", "Labour Day", "act"),
+  holiday("2025-10-06", "Labour Day", "nsw"),
   holiday("2025-10-06", "King's Birthday", "qld"),
+  holiday("2025-10-06", "Labour Day", "sa"),
+  holiday("2025-11-04", "Melbourne Cup", "vic", "Melbourne metropolitan area. Some regional areas use a different day."),
+  holiday("2025-12-24", "Christmas Eve", "nt", "Part-day public holiday in the evening.", true),
   holiday("2025-12-24", "Christmas Eve", "qld", "Part-day public holiday from 6pm to midnight.", true),
+  holiday("2025-12-24", "Christmas Eve", "sa", "Part-day public holiday in the evening.", true),
   holiday("2025-12-25", "Christmas Day", "national"),
   holiday("2025-12-26", "Boxing Day", "national"),
-
   holiday("2026-01-01", "New Year's Day", "national"),
   holiday("2026-01-26", "Australia Day", "national"),
+  holiday("2026-03-02", "Labour Day", "wa"),
+  holiday("2026-03-09", "Canberra Day", "act"),
+  holiday("2026-03-09", "Adelaide Cup Day", "sa"),
+  holiday("2026-03-09", "Eight Hours Day", "tas"),
+  holiday("2026-03-09", "Labour Day", "vic"),
   holiday("2026-04-03", "Good Friday", "national"),
+  holiday("2026-04-04", "Easter Saturday", "act"),
+  holiday("2026-04-04", "Easter Saturday", "nsw"),
+  holiday("2026-04-04", "Easter Saturday", "nt"),
   holiday("2026-04-04", "The day after Good Friday", "qld"),
+  holiday("2026-04-04", "Easter Saturday", "sa"),
+  holiday("2026-04-04", "Easter Saturday", "vic"),
+  holiday("2026-04-05", "Easter Sunday", "act"),
+  holiday("2026-04-05", "Easter Sunday", "nsw"),
+  holiday("2026-04-05", "Easter Sunday", "nt"),
   holiday("2026-04-05", "Easter Sunday", "qld"),
+  holiday("2026-04-05", "Easter Sunday", "sa"),
+  holiday("2026-04-05", "Easter Sunday", "vic"),
+  holiday("2026-04-05", "Easter Sunday", "wa"),
   holiday("2026-04-06", "Easter Monday", "national"),
-  holiday("2026-04-25", "Anzac Day", "national", "Falls on Saturday and is observed that day in Queensland."),
+  holiday("2026-04-25", "Anzac Day", "nsw", "The Saturday is a public holiday, and Monday is an additional day."),
+  holiday("2026-04-25", "Anzac Day", "nt"),
+  holiday("2026-04-25", "Anzac Day", "qld"),
+  holiday("2026-04-25", "Anzac Day", "sa"),
+  holiday("2026-04-25", "Anzac Day", "tas"),
+  holiday("2026-04-25", "Anzac Day", "vic"),
+  holiday("2026-04-25", "Anzac Day", "wa", "The Saturday is a public holiday, and Monday is an additional day."),
+  holiday("2026-04-27", "Anzac Day", "act"),
+  holiday("2026-04-27", "Anzac Day", "nsw"),
+  holiday("2026-04-27", "Anzac Day", "wa"),
+  holiday("2026-05-04", "May Day", "nt"),
   holiday("2026-05-04", "Labour Day", "qld"),
+  holiday("2026-06-01", "Reconciliation Day", "act"),
+  holiday("2026-06-01", "Western Australia Day", "wa"),
+  holiday("2026-06-08", "King's Birthday", "act"),
+  holiday("2026-06-08", "King's Birthday", "nsw"),
+  holiday("2026-06-08", "King's Birthday", "nt"),
+  holiday("2026-06-08", "King's Birthday", "sa"),
+  holiday("2026-06-08", "King's Birthday", "tas"),
+  holiday("2026-06-08", "King's Birthday", "vic"),
+  holiday("2026-08-03", "Picnic Day", "nt"),
   holiday("2026-08-12", "Royal Queensland Show (Ekka)", "qld", "Brisbane area only. Not a statewide public holiday."),
+  holiday("2026-09-25", "Friday before AFL Grand Final", "vic"),
+  holiday("2026-09-28", "King's Birthday", "wa"),
+  holiday("2026-10-05", "Labour Day", "act"),
+  holiday("2026-10-05", "Labour Day", "nsw"),
   holiday("2026-10-05", "King's Birthday", "qld"),
+  holiday("2026-10-05", "Labour Day", "sa"),
+  holiday("2026-11-03", "Melbourne Cup", "vic", "Melbourne metropolitan area. Some regional areas use a different day."),
+  holiday("2026-12-24", "Christmas Eve", "nt", "Part-day public holiday in the evening.", true),
   holiday("2026-12-24", "Christmas Eve", "qld", "Part-day public holiday from 6pm to midnight.", true),
+  holiday("2026-12-24", "Christmas Eve", "sa", "Part-day public holiday in the evening.", true),
   holiday("2026-12-25", "Christmas Day", "national"),
   holiday("2026-12-26", "Boxing Day", "national"),
-  holiday("2026-12-28", "Boxing Day holiday", "qld", "Additional public holiday because Boxing Day is a Saturday."),
-
+  holiday("2026-12-28", "Boxing Day holiday", "act", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2026-12-28", "Boxing Day holiday", "nsw", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2026-12-28", "Boxing Day holiday", "nt", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2026-12-28", "Boxing Day holiday", "qld", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2026-12-28", "Boxing Day holiday", "sa", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2026-12-28", "Boxing Day holiday", "tas", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2026-12-28", "Boxing Day holiday", "vic", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2026-12-28", "Boxing Day holiday", "wa", "Additional public holiday because Boxing Day is on a weekend."),
   holiday("2027-01-01", "New Year's Day", "national"),
   holiday("2027-01-26", "Australia Day", "national"),
+  holiday("2027-03-01", "Labour Day", "wa"),
+  holiday("2027-03-08", "Canberra Day", "act"),
+  holiday("2027-03-08", "Adelaide Cup Day", "sa"),
+  holiday("2027-03-08", "Eight Hours Day", "tas"),
+  holiday("2027-03-08", "Labour Day", "vic"),
   holiday("2027-03-26", "Good Friday", "national"),
+  holiday("2027-03-27", "Easter Saturday", "act"),
+  holiday("2027-03-27", "Easter Saturday", "nsw"),
+  holiday("2027-03-27", "Easter Saturday", "nt"),
   holiday("2027-03-27", "The day after Good Friday", "qld"),
+  holiday("2027-03-27", "Easter Saturday", "sa"),
+  holiday("2027-03-27", "Easter Saturday", "vic"),
+  holiday("2027-03-28", "Easter Sunday", "act"),
+  holiday("2027-03-28", "Easter Sunday", "nsw"),
+  holiday("2027-03-28", "Easter Sunday", "nt"),
   holiday("2027-03-28", "Easter Sunday", "qld"),
+  holiday("2027-03-28", "Easter Sunday", "sa"),
+  holiday("2027-03-28", "Easter Sunday", "vic"),
+  holiday("2027-03-28", "Easter Sunday", "wa"),
   holiday("2027-03-29", "Easter Monday", "national"),
-  holiday("2027-04-26", "Anzac Day", "national", "Observed Monday because 25 April is a Sunday."),
+  holiday("2027-04-25", "Anzac Day", "act", "The Sunday is a public holiday, and Monday is an additional day."),
+  holiday("2027-04-25", "Anzac Day", "nsw", "The Sunday is a public holiday, and Monday is an additional day."),
+  holiday("2027-04-25", "Anzac Day", "sa"),
+  holiday("2027-04-25", "Anzac Day", "tas"),
+  holiday("2027-04-25", "Anzac Day", "vic"),
+  holiday("2027-04-25", "Anzac Day", "wa", "The Sunday is a public holiday, and Monday is an additional day."),
+  holiday("2027-04-26", "Anzac Day", "act"),
+  holiday("2027-04-26", "Anzac Day", "nsw"),
+  holiday("2027-04-26", "Anzac Day", "nt"),
+  holiday("2027-04-26", "Anzac Day", "qld"),
+  holiday("2027-04-26", "Anzac Day", "wa"),
+  holiday("2027-05-03", "May Day", "nt"),
   holiday("2027-05-03", "Labour Day", "qld"),
+  holiday("2027-05-31", "Reconciliation Day", "act"),
+  holiday("2027-06-07", "Western Australia Day", "wa"),
+  holiday("2027-06-14", "King's Birthday", "act"),
+  holiday("2027-06-14", "King's Birthday", "nsw"),
+  holiday("2027-06-14", "King's Birthday", "nt"),
+  holiday("2027-06-14", "King's Birthday", "sa"),
+  holiday("2027-06-14", "King's Birthday", "tas"),
+  holiday("2027-06-14", "King's Birthday", "vic"),
+  holiday("2027-08-02", "Picnic Day", "nt"),
   holiday("2027-08-11", "Royal Queensland Show (Ekka)", "qld", "Brisbane area only. Not a statewide public holiday."),
+  holiday("2027-09-27", "King's Birthday", "wa"),
+  holiday("2027-10-04", "Labour Day", "act"),
+  holiday("2027-10-04", "Labour Day", "nsw"),
   holiday("2027-10-04", "King's Birthday", "qld"),
+  holiday("2027-10-04", "Labour Day", "sa"),
+  holiday("2027-11-02", "Melbourne Cup", "vic", "Melbourne metropolitan area. Some regional areas use a different day."),
+  holiday("2027-12-24", "Christmas Eve", "nt", "Part-day public holiday in the evening.", true),
   holiday("2027-12-24", "Christmas Eve", "qld", "Part-day public holiday from 6pm to midnight.", true),
+  holiday("2027-12-24", "Christmas Eve", "sa", "Part-day public holiday in the evening.", true),
   holiday("2027-12-25", "Christmas Day", "national"),
   holiday("2027-12-26", "Boxing Day", "national"),
-  holiday("2027-12-27", "Christmas Day holiday", "qld", "Additional public holiday because Christmas Day is a Saturday."),
-  holiday("2027-12-28", "Boxing Day holiday", "qld", "Additional public holiday because Boxing Day is a Sunday."),
-
+  holiday("2027-12-27", "Christmas Day holiday", "act", "Additional public holiday because Christmas Day is on a weekend."),
+  holiday("2027-12-27", "Christmas Day holiday", "nsw", "Additional public holiday because Christmas Day is on a weekend."),
+  holiday("2027-12-27", "Christmas Day holiday", "nt", "Additional public holiday because Christmas Day is on a weekend."),
+  holiday("2027-12-27", "Christmas Day holiday", "qld", "Additional public holiday because Christmas Day is on a weekend."),
+  holiday("2027-12-27", "Christmas Day holiday", "sa", "Additional public holiday because Christmas Day is on a weekend."),
+  holiday("2027-12-27", "Christmas Day holiday", "tas", "Additional public holiday because Christmas Day is on a weekend."),
+  holiday("2027-12-27", "Christmas Day holiday", "vic", "Additional public holiday because Christmas Day is on a weekend."),
+  holiday("2027-12-27", "Christmas Day holiday", "wa", "Additional public holiday because Christmas Day is on a weekend."),
+  holiday("2027-12-28", "Boxing Day holiday", "act", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2027-12-28", "Boxing Day holiday", "nsw", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2027-12-28", "Boxing Day holiday", "nt", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2027-12-28", "Boxing Day holiday", "qld", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2027-12-28", "Boxing Day holiday", "sa", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2027-12-28", "Boxing Day holiday", "tas", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2027-12-28", "Boxing Day holiday", "vic", "Additional public holiday because Boxing Day is on a weekend."),
+  holiday("2027-12-28", "Boxing Day holiday", "wa", "Additional public holiday because Boxing Day is on a weekend."),
   holiday("2028-01-01", "New Year's Day", "national"),
-  holiday("2028-01-03", "New Year's Day holiday", "qld", "Additional public holiday because New Year's Day is a Saturday."),
+  holiday("2028-01-03", "New Year's Day holiday", "act", "Additional public holiday because New Year's Day is on a weekend."),
+  holiday("2028-01-03", "New Year's Day holiday", "nsw", "Additional public holiday because New Year's Day is on a weekend."),
+  holiday("2028-01-03", "New Year's Day holiday", "nt", "Additional public holiday because New Year's Day is on a weekend."),
+  holiday("2028-01-03", "New Year's Day holiday", "qld", "Additional public holiday because New Year's Day is on a weekend."),
+  holiday("2028-01-03", "New Year's Day holiday", "sa", "Additional public holiday because New Year's Day is on a weekend."),
+  holiday("2028-01-03", "New Year's Day holiday", "tas", "Additional public holiday because New Year's Day is on a weekend."),
+  holiday("2028-01-03", "New Year's Day holiday", "vic", "Additional public holiday because New Year's Day is on a weekend."),
+  holiday("2028-01-03", "New Year's Day holiday", "wa", "Additional public holiday because New Year's Day is on a weekend."),
   holiday("2028-01-26", "Australia Day", "national"),
+  holiday("2028-03-13", "Labour Day", "wa", "From 2028 this is the second Monday in March."),
+  holiday("2028-03-13", "Canberra Day", "act"),
+  holiday("2028-03-13", "Adelaide Cup Day", "sa"),
+  holiday("2028-03-13", "Eight Hours Day", "tas"),
+  holiday("2028-03-13", "Labour Day", "vic"),
   holiday("2028-04-14", "Good Friday", "national"),
+  holiday("2028-04-15", "Easter Saturday", "act"),
+  holiday("2028-04-15", "Easter Saturday", "nsw"),
+  holiday("2028-04-15", "Easter Saturday", "nt"),
   holiday("2028-04-15", "The day after Good Friday", "qld"),
+  holiday("2028-04-15", "Easter Saturday", "sa"),
+  holiday("2028-04-15", "Easter Saturday", "vic"),
+  holiday("2028-04-16", "Easter Sunday", "act"),
+  holiday("2028-04-16", "Easter Sunday", "nsw"),
+  holiday("2028-04-16", "Easter Sunday", "nt"),
   holiday("2028-04-16", "Easter Sunday", "qld"),
+  holiday("2028-04-16", "Easter Sunday", "sa"),
+  holiday("2028-04-16", "Easter Sunday", "vic"),
+  holiday("2028-04-16", "Easter Sunday", "wa"),
   holiday("2028-04-17", "Easter Monday", "national"),
   holiday("2028-04-25", "Anzac Day", "national"),
+  holiday("2028-05-01", "May Day", "nt"),
   holiday("2028-05-01", "Labour Day", "qld"),
+  holiday("2028-05-29", "Reconciliation Day", "act"),
+  holiday("2028-06-05", "Western Australia Day", "wa"),
+  holiday("2028-06-12", "King's Birthday", "act"),
+  holiday("2028-06-12", "King's Birthday", "nsw"),
+  holiday("2028-06-12", "King's Birthday", "nt"),
+  holiday("2028-06-12", "King's Birthday", "sa"),
+  holiday("2028-06-12", "King's Birthday", "tas"),
+  holiday("2028-06-12", "King's Birthday", "vic"),
+  holiday("2028-06-12", "King's Birthday", "wa", "From 2028 this is the second Monday in June."),
+  holiday("2028-08-07", "Picnic Day", "nt"),
+  holiday("2028-10-02", "Labour Day", "act"),
+  holiday("2028-10-02", "Labour Day", "nsw"),
+  holiday("2028-10-02", "King's Birthday", "qld"),
+  holiday("2028-10-02", "Labour Day", "sa"),
+  holiday("2028-11-07", "Melbourne Cup", "vic"),
+  holiday("2028-12-25", "Christmas Day", "national"),
+  holiday("2028-12-26", "Boxing Day", "national"),
 ];
 
-const HOLIDAY_BY_DATE = new Map(HOLIDAYS.map((item) => [item.date, item]));
+const HOLIDAYS_BY_DATE = new Map<string, Holiday[]>();
+for (const item of HOLIDAYS) {
+  const list = HOLIDAYS_BY_DATE.get(item.date) ?? [];
+  list.push(item);
+  HOLIDAYS_BY_DATE.set(item.date, list);
+}
 
-export function holidayOn(iso: string): Holiday | undefined {
-  return HOLIDAY_BY_DATE.get(iso);
+export function isAustralianState(value: unknown): value is AustralianState {
+  return HOLIDAY_STATES.some((item) => item.id === value);
+}
+
+export function holidayStateLabel(state: AustralianState): string {
+  return HOLIDAY_STATES.find((item) => item.id === state)?.label ?? "Queensland";
+}
+
+export function holidayStateScope(state: AustralianState): HolidayScope {
+  return HOLIDAY_STATES.find((item) => item.id === state)?.scope ?? "qld";
+}
+
+/** The holiday for this state. A state day is used ahead of a national day on the same date. Missing state means Queensland. */
+export function holidayOn(iso: string, state: AustralianState = "QLD"): Holiday | undefined {
+  const matches = HOLIDAYS_BY_DATE.get(iso) ?? [];
+  const scope = holidayStateScope(state);
+  const local = matches.find((item) => item.scope === scope);
+  return local ?? matches.find((item) => item.scope === "national");
 }

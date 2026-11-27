@@ -12,7 +12,7 @@ import { buildTaxTrackWorkbook } from "../lib/reportWorkbook";
 import { latestPublishedVersion, parseChangelog, readChangelog } from "../lib/changelog";
 import { summariseRentals } from "../lib/rentals";
 import { depreciationSchedule } from "../lib/depreciation";
-import { summariseCar } from "../lib/car";
+import { summariseCar, summariseLogbook } from "../lib/car";
 import { createUserVaultBundle, decryptJson, encryptJson, rewrapVaultForNewPassword, unlockVaultWithPassword, unlockVaultWithRecoveryKey } from "../lib/crypto/vaultCrypto";
 import * as XLSX from "xlsx";
 import type { DepreciatingAsset, Expense, YearData } from "../lib/types";
@@ -59,6 +59,8 @@ assert(financialYearIdFor(new Date(2026, 10, 11)) === "2026-27", "November 2026 
 assert(financialYearIdFor(new Date(2027, 6, 1)) === "2027-28", "1 July 2027 is the 2027-28 income year");
 assert(holidayOn("2026-12-24")?.partDay === true, "Christmas Eve is part-day");
 assert(holidayOn("2026-12-28")?.scope === "qld", "2026 additional Boxing Day");
+assert(holidayOn("2026-06-08", "NSW")?.name === "King's Birthday" && holidayOn("2026-06-08") === undefined, "the June King's Birthday is New South Wales, not Queensland");
+assert(holidayOn("2026-03-09", "VIC")?.name === "Labour Day", "Victoria has its own Labour Day");
 assert(isWeekend("2026-04-25") === true, "Anzac Day 2026 is a Saturday");
 assert(isWeekend("2026-04-24") === false, "24 April 2026 is a Friday");
 assert(isUsualWorkDay("2026-04-24", [1, 2, 3, 4, 5]), "Friday is a usual Monday to Friday");
@@ -420,6 +422,60 @@ assert(twoCars.cents === 528000, "each car has its own 5,000 km cap");
 assert(summariseCar([carTrip("now", 100)], yearById("2026-27").carCentsPerKm).cents === 9100, "2026â€“27 uses 91 cents a kilometre");
 const carOnSummary = buildSummary(reportYear, { dayLogs: {}, expenses: [carTrip("short", 100)] });
 assert(carOnSummary.totalDollars === 88 && carOnSummary.blocks.some((block) => block.id === "car"), "car kilometres are in the total");
+const logbookReady = summariseLogbook(
+  [
+    expense({ id: "log-trip", amount: 0, category: "car", kilometres: 100, carRecord: "trip" }),
+    expense({ id: "log-fuel", amount: 200, category: "car", carRecord: "cost", carCost: "fuel", description: "Fuel" }),
+  ],
+  { started: "2025-07-01", openingKilometres: 10000, closingKilometres: 11000 },
+  "2025-10-01",
+);
+assert(logbookReady.ready && logbookReady.percent === 10 && logbookReady.claimCents === 2000 && logbookReady.dollars === 20, "a ready logbook claims 10% of the fuel");
+const logbookWaiting = summariseLogbook(
+  [expense({ id: "log-fuel-open", amount: 200, category: "car", carRecord: "cost", carCost: "fuel", description: "Fuel" })],
+  { started: "2025-07-01", openingKilometres: 10000, closingKilometres: null },
+  "2025-10-01",
+);
+assert(!logbookWaiting.ready && logbookWaiting.claimCents === 0, "a logbook without a closing odometer stays out");
+const logbookOnSummary = buildSummary(reportYear, {
+  dayLogs: {},
+  expenses: [
+    expense({ id: "log-trip", amount: 0, category: "car", kilometres: 100, carRecord: "trip" }),
+    expense({ id: "log-fuel", amount: 200, category: "car", carRecord: "cost", carCost: "fuel", description: "Fuel" }),
+  ],
+  carMethod: "logbook",
+  logbook: { started: "2025-07-01", openingKilometres: 10000, closingKilometres: 11000 },
+});
+assert(logbookOnSummary.totalDollars === 20 && logbookOnSummary.blocks.some((block) => block.id === "car" && block.kicker === "Logbook"), "the summary uses the logbook percentage");
+const fuelOnCents = buildSummary(reportYear, {
+  dayLogs: {},
+  expenses: [expense({ id: "fuel-only", amount: 200, category: "car", carRecord: "cost", carCost: "fuel", description: "Fuel" })],
+});
+assert(fuelOnCents.totalDollars === 0 && fuelOnCents.exclusionRows.some((row) => row.includes("cents per kilometre")), "fuel stays out while cents per kilometre is selected");
+const shared = buildSummary(reportYear, { dayLogs: {}, expenses: [expense({ id: "half-sub", amount: 100, category: "subscriptions", workUsePercent: 40 })] });
+assert(shared.totalDollars === 40, "a private share uses the work percentage");
+const sharedDollars = buildSummary(reportYear, { dayLogs: {}, expenses: [expense({ id: "part-sub", amount: 80, category: "subscriptions", workAmount: 25.5 })] });
+assert(sharedDollars.totalDollars === 25, "a private share can be work dollars");
+const away = buildSummary(reportYear, { dayLogs: {}, expenses: [expense({ id: "flight", amount: 80.4, category: "travel", description: "Flight" })] });
+assert(away.totalDollars === 80 && away.blocks.some((block) => block.id === "travel"), "nights away are their own total");
+const later = buildSummary(reportYear, { dayLogs: {}, expenses: [expense({ id: "later", amount: 40, category: "unsure", description: "Receipt" })] });
+assert(later.totalDollars === 0 && later.exclusionRows.some((row) => row.startsWith("Not sure yet")), "an unlabelled receipt stays out of the total");
+const logbookCar = buildSummary(
+  reportYear,
+  {
+    dayLogs: {},
+    expenses: [
+      expense({ id: "log-trip-car", amount: 0, category: "car", kilometres: 100, carRecord: "trip" }),
+      expense({ id: "log-fuel-car", amount: 200, category: "car", carRecord: "cost", carCost: "fuel", description: "Fuel" }),
+    ],
+    carMethod: "logbook",
+    logbook: { started: "2025-07-01", openingKilometres: 10000, closingKilometres: 11000 },
+  },
+  { assets: [sampleAsset({ id: "car-asset", description: "Car", logbookCar: true })] },
+);
+assert(logbookCar.totalDollars === 70, "a logbook car uses the logbook percentage for decline in value");
+const centsCar = buildSummary(reportYear, { dayLogs: {}, expenses: [] }, { assets: [sampleAsset({ id: "car-asset", description: "Car", logbookCar: true })] });
+assert(centsCar.totalDollars === 0, "a logbook car stays out while cents per kilometre is selected");
 const legacyExpense = validateBackup({
   app: "taxtrack",
   version: 1,
@@ -453,7 +509,7 @@ const changelog = parseChangelog("## [Unreleased]\n\n### Added\n\n- 2026-11-13 â
 assert(changelog.releases[0]?.version === "Unreleased" && changelog.releases[0].subsections[0]?.items[0]?.date === "2026-11-13", "the changelog keeps the date on each item");
 const published = readChangelog().releases.filter((release) => release.version !== "Unreleased");
 assert(published.some((release) => release.version === "0.7.0"), "the published changelog has the production version");
-assert(latestPublishedVersion(published) === "0.7.0", "the bell follows the latest published changelog");
+assert(latestPublishedVersion(published) === "0.8.0", "the bell follows the latest published changelog");
 assert(
   published.every((release) => release.subsections.every((subsection) => subsection.items.every((item) => !item.date && item.text.length < 90))),
   "published changelog bullets are short and undated",

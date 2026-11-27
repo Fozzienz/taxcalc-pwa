@@ -2,7 +2,23 @@
 
 What’s new in TaxTrack. Plain language only.
 
-## [Unreleased]
+## [0.8.0] - 2026-11-27
+
+### Added
+
+- The car can use cents per kilometre, or a 12-week logbook.
+- A past car trip can be chosen from a list.
+- A question mark explains the two car methods.
+- A question mark explains working from home.
+- Public holidays follow the state you choose.
+- Nights away, a private share, and tax-fee types.
+- Not sure yet holds a receipt out of the total.
+- A logbook car uses the logbook percentage.
+
+### Changed
+
+- Working from home is chosen on Expenses.
+- A text box has an X that clears it.
 
 ## [0.7.0] - 2026-11-27
 

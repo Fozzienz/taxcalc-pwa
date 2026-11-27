@@ -4,10 +4,11 @@ import { useState } from "react";
 import { ChevronDown, Laptop } from "lucide-react";
 import type { FinancialYear } from "@/lib/ato-rules";
 import { formatMonth } from "@/lib/dates";
-import { depreciationMethodLabel, depreciationSchedule, isImmediateAsset } from "@/lib/depreciation";
+import { summariseLogbook } from "@/lib/car";
+import { assetYearClaim, depreciationMethodLabel, depreciationSchedule, isImmediateAsset } from "@/lib/depreciation";
 import { formatCents, toCents } from "@/lib/money";
-import type { DepreciatingAsset, DepreciationMethod } from "@/lib/types";
-import { buttonClass, cx, Field, inputClass, Modal, Panel } from "@/components/ui";
+import type { CarLogbook, CarMethod, DepreciatingAsset, DepreciationMethod, Expense } from "@/lib/types";
+import { buttonClass, cx, Field, inputClass, Modal, Panel, TextBox } from "@/components/ui";
 
 function todayIso(): string {
   const now = new Date();
@@ -31,11 +32,17 @@ function blank(date: string): DepreciatingAsset {
 export function AssetManager({
   year,
   assets,
+  expenses,
+  carMethod,
+  logbook,
   onSave,
   onDelete,
 }: {
   year: FinancialYear;
   assets: DepreciatingAsset[];
+  expenses: Expense[];
+  carMethod: CarMethod;
+  logbook: CarLogbook | undefined;
   onSave: (asset: DepreciatingAsset) => void;
   onDelete: (id: string) => void;
 }) {
@@ -51,9 +58,18 @@ export function AssetManager({
   const cost = Number(price);
   const years = Number(life);
   const workUse = Number(usePercent);
+  const book = carMethod === "logbook" ? summariseLogbook(expenses, logbook, new Date().toISOString().slice(0, 10)) : null;
+  const carContext = { applies: carMethod === "logbook", share: book?.ready ? book.share : null };
   const previewAsset: DepreciatingAsset | null =
     draft.description.trim() && Number.isFinite(cost) && cost > 0 && Number.isFinite(years) && years >= 1 && years <= 40 && Number.isInteger(workUse) && workUse >= 1 && workUse <= 100
-      ? { ...draft, description: draft.description.trim(), cost, effectiveLifeYears: years, workUsePercent: workUse }
+      ? {
+          ...draft,
+          description: draft.description.trim(),
+          cost,
+          effectiveLifeYears: years,
+          workUsePercent: workUse,
+          ...(draft.logbookCar ? { logbookCar: true } : {}),
+        }
       : null;
   const preview = previewAsset ? depreciationSchedule(previewAsset) : [];
   const thisYear = preview.find((row) => row.start === year.start);
@@ -108,7 +124,8 @@ export function AssetManager({
     }
     const editing = Boolean(draft.id);
     const savedMonth = draft.purchased.slice(0, 7);
-    onSave(previewAsset);
+    const { logbookCar: _flag, ...rest } = previewAsset;
+    onSave(draft.logbookCar ? { ...rest, logbookCar: true } : rest);
     closeEditor();
     setOpenMonths((current) => new Set([...(current ?? []), savedMonth]));
     setSavedNote(editing ? "Asset updated." : "Asset added.");
@@ -158,19 +175,27 @@ export function AssetManager({
       <Modal wide title={draft.id ? draft.description.trim() || "Edit asset" : "Add asset"} onClose={closeEditor}>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Description" required>
-            <input className={inputClass} value={draft.description} placeholder="Laptop" onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
+            <TextBox value={draft.description} placeholder="Laptop" onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
           </Field>
           <Field label="First used" required hint="The day you first used it to earn income.">
             <input className={inputClass} type="date" value={draft.purchased} onChange={(event) => setDraft({ ...draft, purchased: event.target.value })} />
           </Field>
           <Field label="Purchase price (AUD)" required>
-            <input className={inputClass} inputMode="decimal" value={price} placeholder="0.00" onChange={(event) => setPrice(event.target.value)} />
+            <TextBox inputMode="decimal" value={price} placeholder="0.00" onChange={(event) => setPrice(event.target.value)} />
           </Field>
-          <Field label="Work use %" required>
-            <input className={inputClass} inputMode="numeric" value={usePercent} onChange={(event) => setUsePercent(event.target.value)} />
-          </Field>
+          {draft.logbookCar ? (
+            <p className="self-end text-sm leading-6 text-fog">
+              {book?.percent != null
+                ? `Work use is ${new Intl.NumberFormat("en-AU", { maximumFractionDigits: 1 }).format(book.percent)}% from the logbook.`
+                : "The logbook is not ready, so this year's decline stays out."}
+            </p>
+          ) : (
+            <Field label="Work use %" required>
+              <TextBox inputMode="numeric" value={usePercent} onChange={(event) => setUsePercent(event.target.value)} />
+            </Field>
+          )}
           <Field label="Effective life (years)" required hint="Used when the cost is over $300.">
-            <input className={inputClass} inputMode="decimal" value={life} onChange={(event) => setLife(event.target.value)} />
+            <TextBox inputMode="decimal" value={life} onChange={(event) => setLife(event.target.value)} />
           </Field>
           {immediate ? null : (
             <Field label="Calculation">
@@ -181,17 +206,28 @@ export function AssetManager({
             </Field>
           )}
         </div>
+        {carMethod === "logbook" || draft.logbookCar ? (
+          <label className="mt-3 flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1 size-4 accent-[var(--mint)]"
+              checked={draft.logbookCar === true}
+              onChange={(event) => setDraft({ ...draft, logbookCar: event.target.checked })}
+            />
+            <span>This is the car on the logbook. Work use comes from the logbook, so you do not type it twice. A cents-per-kilometre year leaves this decline out, because the rate already includes it.</span>
+          </label>
+        ) : null}
         <Field label="Notes">
-          <input className={inputClass} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
+          <TextBox value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
         </Field>
         {previewAsset ? (
           <p className="mt-3 text-sm text-fog">
-            {depreciationMethodLabel(previewAsset)}
-            {thisYear ? ` · ${year.label} claim ${formatCents(thisYear.claimCents)}` : ` · nothing in ${year.label}`}
+            {previewAsset.logbookCar ? "Logbook car" : depreciationMethodLabel(previewAsset)}
+            {thisYear ? ` · ${year.label} claim ${formatCents(previewAsset.logbookCar ? assetYearClaim(previewAsset, year.start, carContext) : thisYear.claimCents)}` : ` · nothing in ${year.label}`}
             {thisYear ? ` · ${thisYear.daysHeld} days` : ""}
           </p>
         ) : null}
-        {preview.length > 0 ? (
+        {preview.length > 0 && !draft.logbookCar ? (
           <table className="mt-3 w-full text-sm">
             <thead>
               <tr className="text-xs text-fog">
@@ -270,7 +306,7 @@ export function AssetManager({
                   <ul className="border-t border-line">
                     {items.map((asset) => {
                       const schedule = depreciationSchedule(asset);
-                      const current = schedule.find((row) => row.start === year.start);
+                      const current = assetYearClaim(asset, year.start, carContext);
                       return (
                         <li key={asset.id} className="border-b border-line last:border-b-0">
                           <button type="button" className="w-full px-4 py-2.5 text-left" onClick={() => load(asset)}>
@@ -278,7 +314,7 @@ export function AssetManager({
                             <p className="mt-0.5 text-xs text-fog">
                               {asset.purchased.split("-").reverse().join("/")} · {formatCents(toCents(asset.cost))} · {depreciationMethodLabel(asset)}
                               {isImmediateAsset(asset.cost, asset.workUsePercent) ? "" : ` · ${asset.effectiveLifeYears}y`}
-                              {current ? ` · ${year.label} ${formatCents(current.claimCents)}` : ""}
+                              {schedule.some((row) => row.start === year.start) ? ` · ${year.label} ${formatCents(current)}` : ""}
                             </p>
                           </button>
                         </li>

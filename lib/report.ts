@@ -1,11 +1,11 @@
 import { assetTreatment, EXPORT_DISCLAIMER, RECORD_KEEPING, type FinancialYear } from "@/lib/ato-rules";
 import { expenseClaimCents } from "@/lib/calculations";
-import { carClaims, formatKilometres } from "@/lib/car";
+import { carClaims, formatKilometres, isCarCost, isCarTrip, logbookCostClaims, summariseLogbook, tripTimes } from "@/lib/car";
 import { formatMonth, formatPeriod, formatTimestamp } from "@/lib/dates";
 import { deductionCents, formatCents, formatHours, formatWholeDollars, toCents, wholeDollarsFromCents } from "@/lib/money";
-import { depreciationForPeriod, depreciationMethodLabel } from "@/lib/depreciation";
+import { assetYearClaim, depreciationForPeriod, depreciationMethodLabel } from "@/lib/depreciation";
 import { buildSummary, nothingEnteredLine, type SummaryModel } from "@/lib/summary";
-import { categoryById, isRunningCost, modeById, rentalCategoryById, type DepreciatingAsset, type Expense, type RentalProperty, type WfhMethod, type YearData } from "@/lib/types";
+import { categoryById, isRunningCost, modeById, rentalCategoryById, type CarMethod, type DepreciatingAsset, type Expense, type RentalProperty, type WfhMethod, type YearData } from "@/lib/types";
 
 export interface YearReport {
   filenameBase: string;
@@ -82,14 +82,27 @@ function auDate(iso: string): string {
   return `${day}/${month}/${year}`;
 }
 
+function mileagePurpose(expense: Expense): string {
+  const from = expense.tripFrom?.trim() ?? "";
+  const to = expense.tripTo?.trim() ?? "";
+  const route = from && to ? `${from} to ${to}` : from || to;
+  const purpose = expense.description || expense.notes || "Work trip";
+  return route ? `${route} · ${purpose}` : purpose;
+}
+
 function aud(cents: number): number {
   return Math.round(cents) / 100;
 }
 
-function inclusion(expense: Expense, claimCents: number, wfhMethod: WfhMethod): string {
+function inclusion(expense: Expense, claimCents: number, wfhMethod: WfhMethod, carMethod: CarMethod): string {
   if (isRunningCost(expense.category) && wfhMethod !== "actual") return "No - covered by the fixed rate";
+  if (isCarCost(expense) && claimCents <= 0) {
+    return carMethod === "logbook" ? "No - logbook needs 12 weeks and a closing odometer" : "No - covered by the cents per km rate";
+  }
+  if (isCarTrip(expense) && carMethod === "logbook") return "No - kilometres for the logbook, not a dollar claim";
   if (expense.category === "car" && claimCents <= 0) return "No - over 5,000 km for this car";
   if (assetTreatment(expense) === "depreciating") return "No - depreciating asset, not in the total";
+  if (expense.category === "unsure") return "No - category not chosen";
   if (expense.category === "donations" && toCents(expense.amount) < 200) return "No - under $2";
   if (expense.category === "donations" && !expense.dgrConfirmed) return "No - DGR not confirmed";
   return "Yes";
@@ -103,6 +116,7 @@ function enterDollars(summary: SummaryModel, id: string): number {
   if (id === "education") return figures.selfEducation.wholeDollars;
   if (id === "other") return wholeDollarsFromCents(figures.tools.cents + figures.subscriptions.cents + figures.other.cents);
   if (id === "car") return figures.car.wholeDollars;
+  if (id === "travel") return figures.travel.wholeDollars;
   if (id === "tax") return figures.taxAffairs.wholeDollars;
   if (id === "decline") {
     const enter = summary.blocks.find((block) => block.id === "decline")?.rows.find((row) => row.label === "Enter")?.value ?? "";
@@ -157,10 +171,14 @@ export function buildYearReport(
   const wfhMethod: WfhMethod = summary.wfhMethod;
   const days = Object.values(data.dayLogs).sort((a, b) => a.date.localeCompare(b.date));
   const expenses = [...data.expenses].sort((a, b) => a.date.localeCompare(b.date) || a.description.localeCompare(b.description));
-  const tripClaims = carClaims(expenses, year.carCentsPerKm);
+  const carMethod: CarMethod = data.carMethod === "logbook" ? "logbook" : "cents";
+  const tripClaims =
+    carMethod === "logbook"
+      ? logbookCostClaims(expenses, summariseLogbook(expenses, data.logbook, prepared.toISOString().slice(0, 10)))
+      : carClaims(expenses, year.carCentsPerKm);
   const paths = options.receiptPaths ?? {};
-  const workExpenses = expenses.filter((expense) => expense.category !== "car");
-  const carExpenses = expenses.filter((expense) => expense.category === "car");
+  const workExpenses = expenses.filter((expense) => expense.category !== "car" || isCarCost(expense));
+  const carExpenses = expenses.filter((expense) => isCarTrip(expense));
 
   return {
     filenameBase: `taxtrack-report-${year.id}`,
@@ -207,7 +225,7 @@ export function buildYearReport(
         claimAud: aud(claim),
         claimLabel: formatCents(claim),
         amountLabel: formatCents(toCents(expense.amount)),
-        included: inclusion(expense, claim, wfhMethod),
+        included: inclusion(expense, claim, wfhMethod, carMethod),
         notes: expense.notes,
         ...receiptCell(expense, wfhMethod, paths),
       };
@@ -216,10 +234,10 @@ export function buildYearReport(
       const claim = expenseClaimCents(expense, tripClaims, wfhMethod);
       return {
         date: auDate(expense.date),
-        purpose: expense.description || expense.notes || "Work trip",
+        purpose: mileagePurpose(expense),
         vehicle: expense.vehicle,
-        kilometres: expense.kilometres ?? 0,
-        rateLabel: `${formatCents(year.carCentsPerKm)} per km`,
+        kilometres: (expense.kilometres ?? 0) * tripTimes(expense),
+        rateLabel: carMethod === "logbook" ? "Logbook" : `${formatCents(year.carCentsPerKm)} per km`,
         claimAud: aud(claim),
         claimLabel: formatCents(claim),
         ...receiptCell(expense, wfhMethod, paths),
@@ -245,16 +263,18 @@ export function buildYearReport(
       options.assets && options.assets.length > 0
         ? options.assets.map((asset) => {
             const row = depreciationForPeriod(asset, year.start);
+            const book = data.carMethod === "logbook" ? summariseLogbook(data.expenses, data.logbook, prepared.toISOString().slice(0, 10)) : null;
+            const claimCents = assetYearClaim(asset, year.start, { applies: data.carMethod === "logbook", share: book?.ready ? book.share : null });
             const immediate = depreciationMethodLabel(asset) === "Immediate deduction";
             return {
               description: asset.description,
               purchased: auDate(asset.purchased),
-              method: depreciationMethodLabel(asset),
+              method: asset.logbookCar ? "Logbook car" : depreciationMethodLabel(asset),
               life: immediate ? "" : asset.effectiveLifeYears,
-              workUse: asset.workUsePercent,
+              workUse: asset.logbookCar && book?.percent != null ? book.percent : asset.workUsePercent,
               daysHeld: row?.daysHeld ?? 0,
-              claimAud: aud(row?.claimCents ?? 0),
-              claimLabel: formatCents(row?.claimCents ?? 0),
+              claimAud: aud(claimCents),
+              claimLabel: formatCents(claimCents),
               costLabel: formatCents(toCents(asset.cost)),
               receiptStatus: "No file",
             };

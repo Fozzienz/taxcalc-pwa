@@ -8,7 +8,8 @@ import { createId } from "@/lib/id";
 import { clearReceipts, deleteReceipt } from "@/lib/receiptStore";
 import { pullAccount, uploadDevice } from "@/lib/syncRecords";
 import { ACCOUNT_KEY, loadState, PENDING_KEY, saveState, STORAGE_KEY } from "@/lib/storage";
-import type { AppState, DayLog, DepreciatingAsset, Expense, RentalExpense, WfhMethod, YearId } from "@/lib/types";
+import type { AustralianState } from "@/lib/holidays";
+import type { AppState, CarLogbook, CarMethod, DayLog, DepreciatingAsset, Expense, RentalExpense, WfhMethod, YearId } from "@/lib/types";
 
 interface Snapshot {
   state: AppState;
@@ -285,6 +286,12 @@ function createApi(snapshot: Snapshot) {
     setWfhMethod(yearId: YearId, method: WfhMethod) {
       update((current) => withYear(current, yearId, (year) => ({ ...year, wfhMethod: method })));
     },
+    setCarMethod(yearId: YearId, method: CarMethod) {
+      update((current) => withYear(current, yearId, (year) => ({ ...year, carMethod: method })));
+    },
+    setCarLogbook(yearId: YearId, logbook: CarLogbook) {
+      update((current) => withYear(current, yearId, (year) => ({ ...year, logbook })));
+    },
     setStandardHours(yearId: YearId, hours: number, scope: "forward" | "year") {
       update((current) => {
         const next = { ...current, settings: { ...current.settings, defaultWfhHours: hours } };
@@ -299,6 +306,9 @@ function createApi(snapshot: Snapshot) {
     },
     setRentalProperties(enabled: boolean) {
       update((current) => ({ ...current, settings: { ...current.settings, rentalProperties: enabled } }));
+    },
+    setHolidayState(state: AustralianState) {
+      update((current) => ({ ...current, settings: { ...current.settings, holidayState: state } }));
     },
     setWorkDays(days: number[]) {
       update((current) => ({ ...current, settings: { ...current.settings, workDays: days } }));

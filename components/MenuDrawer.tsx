@@ -3,11 +3,12 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, Clock, Menu, Palette, SlidersHorizontal, X, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock, MapPin, Menu, Palette, SlidersHorizontal, X, type LucideIcon } from "lucide-react";
 import { isValidHours } from "@/lib/dates";
+import { HOLIDAY_STATES, type AustralianState } from "@/lib/holidays";
 import type { TextScale, ThemePreference } from "@/lib/display";
 import { formatHours } from "@/lib/money";
-import { buttonClass, Field, inputClass } from "@/components/ui";
+import { buttonClass, Field, inputClass, TextBox } from "@/components/ui";
 
 const THEMES: { value: ThemePreference; label: string }[] = [
   { value: "dark", label: "Dark" },
@@ -61,6 +62,8 @@ export function MenuDrawer({
   onStandardHours,
   workDays,
   onWorkDays,
+  holidayState,
+  onHolidayState,
 }: {
   theme: ThemePreference;
   textScale: TextScale;
@@ -78,6 +81,8 @@ export function MenuDrawer({
   onStandardHours: (hours: number, scope: "forward" | "year") => void;
   workDays: readonly number[];
   onWorkDays: (days: number[]) => void;
+  holidayState: AustralianState;
+  onHolidayState: (state: AustralianState) => void;
 }) {
   const router = useRouter();
   const titleId = useId();
@@ -142,8 +147,7 @@ export function MenuDrawer({
           </MenuSection>
           <MenuSection icon={Clock} title="Standard day">
             <Field label="Hours per work-from-home day" hint="New days start with this. A single day can still be different.">
-              <input
-                className={inputClass}
+              <TextBox
                 type="number"
                 inputMode="decimal"
                 min={0.1}
@@ -243,6 +247,17 @@ export function MenuDrawer({
               })}
             </div>
             {daysNote ? <p className="text-xs text-gold">{daysNote}</p> : null}
+          </MenuSection>
+          <MenuSection icon={MapPin} title="Public holidays">
+            <Field label="State or territory" hint="National holidays, plus the holidays for this place. A show day that only covers part of the state is still marked.">
+              <select className={inputClass} value={holidayState} onChange={(event) => onHolidayState(event.target.value as AustralianState)}>
+                {HOLIDAY_STATES.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
           </MenuSection>
           <MenuSection icon={SlidersHorizontal} title="Features">
             <button

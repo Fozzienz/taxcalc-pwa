@@ -3,8 +3,8 @@ import { FIXED_RATE_INCLUDES } from "@/lib/ato-rules";
 import { calculateClaims, type ClaimFigures } from "@/lib/calculations";
 import { formatLongDate, formatPeriod } from "@/lib/dates";
 import { formatCents, formatHours, formatWholeDollars, toCents, wholeDollarsFromCents } from "@/lib/money";
-import { categoryById, type DepreciatingAsset, type Expense, type RentalProperty, type WfhMethod, type YearData } from "@/lib/types";
-import { formatKilometres, summariseCar } from "@/lib/car";
+import { categoryById, type CarMethod, type DepreciatingAsset, type Expense, type RentalProperty, type WfhMethod, type YearData } from "@/lib/types";
+import { formatKilometres, isCarCost, isCarTrip, summariseCar, summariseLogbook } from "@/lib/car";
 import { summariseDecline } from "@/lib/depreciation";
 import { summariseRentals } from "@/lib/rentals";
 
@@ -59,18 +59,28 @@ export function buildSummary(
   options: { rentals?: boolean; properties?: readonly RentalProperty[]; assets?: readonly DepreciatingAsset[] } = {},
 ): SummaryModel {
   const wfhMethod: WfhMethod = data.wfhMethod === "actual" ? "actual" : "fixed";
+  const carMethod: CarMethod = data.carMethod === "logbook" ? "logbook" : "cents";
+  const asOf = new Date().toISOString().slice(0, 10);
   const figures = calculateClaims({
     centsPerHour: year.wfhCentsPerHour,
     carCentsPerKm: year.carCentsPerKm,
     dayLogs: Object.values(data.dayLogs),
     expenses: data.expenses,
     wfhMethod,
+    carMethod,
+    logbook: data.logbook,
+    asOf,
   });
   const clothing = combined([figures.clothing.cents, figures.laundry.cents]);
   const otherWork = combined([figures.tools.cents, figures.subscriptions.cents, figures.other.cents]);
   const car = summariseCar(data.expenses, year.carCentsPerKm);
+  const logbook = carMethod === "logbook" ? summariseLogbook(data.expenses, data.logbook, asOf) : null;
+  const hasCarTrips = data.expenses.some((expense) => isCarTrip(expense) && (expense.kilometres ?? 0) > 0);
+  const hasCarCosts = data.expenses.some((expense) => isCarCost(expense));
   const rental = summariseRentals(data.rentalExpenses ?? [], options.properties ?? []);
-  const decline = summariseDecline(options.assets ?? [], year);
+  const carShare = { applies: carMethod === "logbook", share: logbook?.ready ? logbook.share : null };
+  const decline = summariseDecline(options.assets ?? [], year, carShare);
+  const logbookCars = (options.assets ?? []).filter((asset) => asset.logbookCar);
   const homeDollars = wholeDollarsFromCents(wfhMethod === "actual" ? figures.runningCents : figures.wfhCents);
   const totalDollars =
     homeDollars +
@@ -79,6 +89,7 @@ export function buildSummary(
     figures.donations.wholeDollars +
     otherWork.dollars +
     figures.car.wholeDollars +
+    figures.travel.wholeDollars +
     figures.taxAffairs.wholeDollars +
     (options.rentals ? rental.dollars : 0) +
     ((options.assets ?? []).length > 0 ? decline.dollars : 0);
@@ -176,45 +187,87 @@ export function buildSummary(
         "This is separate from the working-from-home figure. If myTax has one box for all other work-related expenses, add the two whole-dollar amounts together.",
       ],
     },
-    ...(figures.car.count > 0
+    ...(logbook && (hasCarTrips || hasCarCosts || data.logbook?.started)
       ? [
           {
             id: "car",
             title: "Work-related car expenses",
-            kicker: "Cents per kilometre",
-            shown: true,
+            kicker: "Logbook",
+            shown: hasCarTrips || hasCarCosts,
             rows: [
-              { label: "Kilometres logged", value: `${formatKilometres(car.kilometres)} km`, fold: true },
-              ...(Math.abs(car.claimKilometres - car.kilometres) > 0.001
-                ? [{ label: "Kilometres that count", value: `${formatKilometres(car.claimKilometres)} km` }]
+              { label: "Kilometres logged", value: `${formatKilometres(logbook.workKilometres)} km`, fold: true },
+              ...(logbook.totalKilometres !== null
+                ? [{ label: "Odometer", value: `${formatKilometres(logbook.totalKilometres)} km` }]
                 : []),
-              { label: "Rate", value: `${formatCents(year.carCentsPerKm)} per km`, fold: true },
-              ...(car.vehicles.length > 1
-                ? car.vehicles.map((row) => ({
-                    label: row.vehicle,
-                    value: `${formatKilometres(row.claimKilometres)} km · ${formatCents(row.cents)}`,
-                  }))
-                : []),
+              { label: "Rate", value: logbook.percent === null ? "Not ready" : `${new Intl.NumberFormat("en-AU", { maximumFractionDigits: 1 }).format(logbook.percent)}% work use`, fold: true },
+              { label: "Running costs", value: formatCents(logbook.costCents), cents: logbook.costCents },
               { label: "Enter", value: formatWholeDollars(figures.car.wholeDollars), strong: true },
             ],
             notes: [
-              `The ${formatCents(year.carCentsPerKm)} rate covers fuel, registration, insurance, servicing, and decline in value. Do not claim those again.`,
-              "The claim stops at 5,000 km for each car. Keep a note of how you worked the kilometres out. Trips between home and your regular workplace are not included.",
-              ...(year.id === "2027-28" ? ["Confirm the 2027–28 cents per kilometre rate before you lodge."] : []),
+              logbook.note,
+              "Trips record kilometres. They do not add a dollar amount. The claim is that percentage of the fuel and other running costs.",
+              ...(logbook.percent !== null
+                ? [`Mark the car under Assets. Decline in value uses this ${new Intl.NumberFormat("en-AU", { maximumFractionDigits: 1 }).format(logbook.percent)}%, so you do not type it twice.`]
+                : []),
+              "Trips between home and your regular workplace are not included.",
             ],
           },
         ]
-      : []),
+      : hasCarTrips
+        ? [
+            {
+              id: "car",
+              title: "Work-related car expenses",
+              kicker: "Cents per kilometre",
+              shown: true,
+              rows: [
+                { label: "Kilometres logged", value: `${formatKilometres(car.kilometres)} km`, fold: true },
+                ...(Math.abs(car.claimKilometres - car.kilometres) > 0.001
+                  ? [{ label: "Kilometres that count", value: `${formatKilometres(car.claimKilometres)} km` }]
+                  : []),
+                { label: "Rate", value: `${formatCents(year.carCentsPerKm)} per km`, fold: true },
+                ...(car.vehicles.length > 1
+                  ? car.vehicles.map((row) => ({
+                      label: row.vehicle,
+                      value: `${formatKilometres(row.claimKilometres)} km · ${formatCents(row.cents)}`,
+                    }))
+                  : []),
+                { label: "Enter", value: formatWholeDollars(figures.car.wholeDollars), strong: true },
+              ],
+              notes: [
+                `The ${formatCents(year.carCentsPerKm)} rate covers fuel, registration, insurance, servicing, and decline in value. Do not claim those again.`,
+                "The claim stops at 5,000 km for each car. Keep a note of how you worked the kilometres out. Trips between home and your regular workplace are not included.",
+                ...(year.id === "2027-28" ? ["Confirm the 2027–28 cents per kilometre rate before you lodge."] : []),
+              ],
+            },
+          ]
+        : []),
+    {
+      id: "travel",
+      title: "Work-related travel",
+      kicker: "Nights away",
+      shown: figures.travel.wholeDollars > 0,
+      rows: [
+        { label: "Flights, accommodation, and meals", value: formatCents(figures.travel.cents), cents: figures.travel.cents },
+        { label: "Enter", value: formatWholeDollars(figures.travel.wholeDollars), strong: true },
+      ],
+      notes: ["This is for nights away. It is not the drive to your usual workplace, and it is not a meal allowance."],
+    },
     {
       id: "tax",
       title: "Cost of managing tax affairs",
       kicker: "Tax agent fees",
       shown: figures.taxAffairs.wholeDollars > 0,
       rows: [
-        { label: "Fees logged", value: formatCents(figures.taxAffairs.cents), cents: figures.taxAffairs.cents },
+        ...(figures.litigationCents > 0
+          ? [{ label: "Litigation", value: formatCents(figures.litigationCents), cents: figures.litigationCents }]
+          : []),
+        ...(figures.taxOtherCents > 0
+          ? [{ label: "Other costs of managing tax affairs", value: formatCents(figures.taxOtherCents), cents: figures.taxOtherCents }]
+          : []),
         { label: "Enter", value: formatWholeDollars(figures.taxAffairs.wholeDollars), strong: true },
       ],
-      notes: ["Claim the fee in the year you paid it."],
+      notes: ["Claim the fee in the year you paid it. ATO interest is not included. The ATO prefills that."],
     },
   ];
 
@@ -254,6 +307,21 @@ export function buildSummary(
   }
 
   const exclusionRows = [
+    ...(carMethod === "cents" && hasCarCosts
+      ? ["Fuel and other car costs stay out while cents per kilometre is selected. The rate already covers them."]
+      : []),
+    ...(logbook && !logbook.ready && hasCarCosts
+      ? ["Car costs stay out until the logbook has 12 weeks and a closing odometer."]
+      : []),
+    ...(logbookCars.length > 0 && carMethod !== "logbook"
+      ? ["Decline in value of the car stays out. The cents per kilometre rate already includes it."]
+      : []),
+    ...(logbookCars.length > 0 && logbook && !logbook.ready
+      ? ["Decline in value of the car stays out until the logbook is ready."]
+      : []),
+    ...figures.unsure.map(
+      (expense) => `Not sure yet · ${formatLongDate(expense.date)} · ${expense.description} · ${formatMoneySafe(expense)}`,
+    ),
     ...figures.depreciating.map((expense) => `Depreciating asset · ${assetLine(expense)}`),
     ...figures.heldDonations.map(
       (expense) => `DGR not confirmed · ${formatLongDate(expense.date)} · ${expense.description} · ${formatMoneySafe(expense)}`,

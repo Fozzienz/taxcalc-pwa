@@ -1,7 +1,11 @@
 import { DEFAULT_WFH_HOURS, FINANCIAL_YEARS, isYearId, yearById, type FinancialYear } from "@/lib/ato-rules";
+import { isAustralianState, type AustralianState } from "@/lib/holidays";
 import { DEFAULT_WORK_DAYS, financialYearIdFor, isRealIsoDate, isValidHours, isWithin, normalWorkDays } from "@/lib/dates";
 import type {
   AppState,
+  CarCostKind,
+  CarLogbook,
+  CarMethod,
   DayLog,
   DepreciatingAsset,
   DepreciationMethod,
@@ -11,6 +15,7 @@ import type {
   RentalCategory,
   RentalExpense,
   RentalProperty,
+  TripPurpose,
   WfhMethod,
   WorkMode,
   YearData,
@@ -36,6 +41,8 @@ export interface BackupYear {
   expenses: BackupExpense[];
   rentalExpenses: RentalExpense[];
   wfhMethod?: WfhMethod;
+  carMethod?: CarMethod;
+  logbook?: CarLogbook;
 }
 
 export interface BackupFile {
@@ -44,7 +51,7 @@ export interface BackupFile {
   exportedAt?: string;
   note?: string;
   activeYear: YearId;
-  settings: { defaultWfhHours: number; rentalProperties: boolean; workDays: number[] };
+  settings: { defaultWfhHours: number; rentalProperties: boolean; workDays: number[]; holidayState?: AustralianState };
   properties: RentalProperty[];
   assets: DepreciatingAsset[];
   years: Record<YearId, BackupYear>;
@@ -92,6 +99,8 @@ export function stateToBackup(state: AppState, exportedAt?: string): BackupFile 
       expenses: [...data.expenses].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
       rentalExpenses: [...(data.rentalExpenses ?? [])].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
       wfhMethod: data.wfhMethod === "actual" ? "actual" : "fixed",
+      carMethod: data.carMethod === "logbook" ? "logbook" : "cents",
+      ...(data.logbook ? { logbook: data.logbook } : {}),
     };
   }
   return {
@@ -104,6 +113,7 @@ export function stateToBackup(state: AppState, exportedAt?: string): BackupFile 
       defaultWfhHours: state.settings.defaultWfhHours,
       rentalProperties: state.settings.rentalProperties === true,
       workDays: normalWorkDays(state.settings.workDays) ?? [...DEFAULT_WORK_DAYS],
+      holidayState: isAustralianState(state.settings.holidayState) ? state.settings.holidayState : "QLD",
     },
     properties: [...(state.properties ?? [])].sort((a, b) => a.address.localeCompare(b.address) || a.id.localeCompare(b.id)),
     assets: [...(state.assets ?? [])].sort((a, b) => a.purchased.localeCompare(b.purchased) || a.description.localeCompare(b.description)),
@@ -133,10 +143,20 @@ export function backupToState(file: BackupFile): AppState {
         workUsePercent: expense.workUsePercent,
         kilometres: expense.kilometres,
         vehicle: expense.vehicle,
+        ...(expense.carRecord ? { carRecord: expense.carRecord } : {}),
+        ...(expense.carCost ? { carCost: expense.carCost } : {}),
+        ...(expense.tripFrom ? { tripFrom: expense.tripFrom } : {}),
+        ...(expense.tripTo ? { tripTo: expense.tripTo } : {}),
+        ...(expense.tripPurpose ? { tripPurpose: expense.tripPurpose } : {}),
+        ...(expense.tripTimes && expense.tripTimes > 1 ? { tripTimes: expense.tripTimes } : {}),
+        ...(typeof expense.workAmount === "number" ? { workAmount: expense.workAmount } : {}),
+        ...(expense.taxAffair === "litigation" ? { taxAffair: expense.taxAffair } : {}),
         receiptId: expense.receiptId,
       })),
       rentalExpenses: (source.rentalExpenses ?? []).map((expense) => ({ ...expense })),
       wfhMethod: source.wfhMethod === "actual" ? "actual" : "fixed",
+      carMethod: source.carMethod === "logbook" ? "logbook" : "cents",
+      ...(source.logbook ? { logbook: source.logbook } : {}),
     };
   }
   return {
@@ -146,6 +166,7 @@ export function backupToState(file: BackupFile): AppState {
       defaultWfhHours: file.settings.defaultWfhHours,
       rentalProperties: file.settings.rentalProperties === true,
       workDays: [...file.settings.workDays],
+      holidayState: isAustralianState(file.settings.holidayState) ? file.settings.holidayState : "QLD",
     },
     properties: file.properties.map((property) => ({ ...property })),
     assets: (file.assets ?? []).map((asset) => ({ ...asset })),
@@ -182,6 +203,10 @@ export function mergeBackups(current: BackupFile, incoming: BackupFile): BackupF
       expenses: [...expenses.values()].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
       rentalExpenses: [...rentalExpenses.values()].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)),
       wfhMethod: incoming.years[year.id].wfhMethod ?? current.years[year.id].wfhMethod ?? "fixed",
+      carMethod: incoming.years[year.id].carMethod ?? current.years[year.id].carMethod ?? "cents",
+      ...((incoming.years[year.id].logbook ?? current.years[year.id].logbook)
+        ? { logbook: incoming.years[year.id].logbook ?? current.years[year.id].logbook }
+        : {}),
     };
   }
   const properties = new Map((current.properties ?? []).map((property) => [property.id, property]));
@@ -197,6 +222,7 @@ export function mergeBackups(current: BackupFile, incoming: BackupFile): BackupF
       defaultWfhHours: incoming.settings.defaultWfhHours,
       rentalProperties: incoming.settings.rentalProperties === true,
       workDays: [...incoming.settings.workDays],
+      holidayState: isAustralianState(incoming.settings.holidayState) ? incoming.settings.holidayState : isAustralianState(current.settings.holidayState) ? current.settings.holidayState : "QLD",
     },
     properties: [...properties.values()].sort((a, b) => a.address.localeCompare(b.address) || a.id.localeCompare(b.id)),
     assets: [...assets.values()].sort((a, b) => a.purchased.localeCompare(b.purchased) || a.description.localeCompare(b.description)),
@@ -341,9 +367,62 @@ function validateExpenses(value: unknown, year: FinancialYear, errors: string[])
       }
       kilometres = hundredths / 100;
     }
-    if (item.category === "car" && kilometres === null) {
+    const carRecord = item.carRecord === undefined ? undefined : item.carRecord === "trip" || item.carRecord === "cost" ? item.carRecord : null;
+    if (carRecord === null) {
+      push(errors, `${label} has a car record TaxTrack cannot read.`);
+      return;
+    }
+    if (item.category === "car" && carRecord !== "cost" && kilometres === null) {
       push(errors, `${label} needs the work kilometres.`);
       return;
+    }
+    if (carRecord === "cost" && kilometres !== null) {
+      push(errors, `${label} is a car cost, so it does not use kilometres.`);
+      return;
+    }
+    const carCosts = new Set<CarCostKind>(["fuel", "registration", "insurance", "service", "other"]);
+    const carCost = item.carCost === undefined ? undefined : carCosts.has(item.carCost as CarCostKind) ? (item.carCost as CarCostKind) : null;
+    if (carCost === null || (carRecord === "cost" && carCost === undefined)) {
+      push(errors, `${label} needs a car cost such as fuel or registration.`);
+      return;
+    }
+    const tripFrom = item.tripFrom === undefined ? undefined : readBoundedString(item.tripFrom, 80);
+    const tripTo = item.tripTo === undefined ? undefined : readBoundedString(item.tripTo, 80);
+    if (tripFrom === null || tripTo === null) {
+      push(errors, `${label} has a trip place that is too long.`);
+      return;
+    }
+    const tripPurpose: TripPurpose | undefined =
+      item.tripPurpose === undefined ? undefined : item.tripPurpose === "work" || item.tripPurpose === "self-education" ? item.tripPurpose : undefined;
+    if (item.tripPurpose !== undefined && tripPurpose === undefined) {
+      push(errors, `${label} needs a trip purpose of work or self-education.`);
+      return;
+    }
+    let workAmount: number | undefined;
+    if (item.workAmount !== undefined && item.workAmount !== null) {
+      if (typeof item.workAmount !== "number" || !Number.isFinite(item.workAmount) || item.workAmount < 0 || item.workAmount > item.amount) {
+        push(errors, `${label} needs a work amount that is not more than the bill.`);
+        return;
+      }
+      const workCents = Math.round(item.workAmount * 100);
+      if (Math.abs(item.workAmount * 100 - workCents) > 1e-6) {
+        push(errors, `${label} has more than two decimal places on the work amount.`);
+        return;
+      }
+      workAmount = workCents / 100;
+    }
+    const taxAffair = item.taxAffair === undefined || item.taxAffair === "other" ? undefined : item.taxAffair === "litigation" ? "litigation" : null;
+    if (taxAffair === null) {
+      push(errors, `${label} needs litigation or other costs for the tax fee.`);
+      return;
+    }
+    let tripTimes: number | undefined;
+    if (item.tripTimes !== undefined) {
+      if (typeof item.tripTimes !== "number" || !Number.isInteger(item.tripTimes) || item.tripTimes < 1 || item.tripTimes > 99) {
+        push(errors, `${label} needs a trip count from 1 to 99.`);
+        return;
+      }
+      tripTimes = item.tripTimes;
     }
     const vehicle = item.vehicle === undefined ? "" : readBoundedString(item.vehicle, 80);
     if (vehicle === null) {
@@ -381,6 +460,14 @@ function validateExpenses(value: unknown, year: FinancialYear, errors: string[])
       workUsePercent,
       kilometres,
       vehicle,
+      ...(carRecord ? { carRecord } : {}),
+      ...(carCost ? { carCost } : {}),
+      ...(tripFrom ? { tripFrom } : {}),
+      ...(tripTo ? { tripTo } : {}),
+      ...(tripPurpose ? { tripPurpose } : {}),
+      ...(tripTimes && tripTimes > 1 ? { tripTimes } : {}),
+      ...(workAmount !== undefined ? { workAmount } : {}),
+      ...(taxAffair === "litigation" ? { taxAffair } : {}),
       receiptId,
       ...(receiptImage ? { receiptImage } : {}),
     });
@@ -553,9 +640,51 @@ function validateAssets(value: unknown, errors: string[]): DepreciatingAsset[] {
       return;
     }
     const method: DepreciationMethod = item.method;
-    assets.push({ id, description, purchased, cost: item.cost, effectiveLifeYears: item.effectiveLifeYears, workUsePercent: item.workUsePercent, method, notes });
+    if (item.logbookCar !== undefined && typeof item.logbookCar !== "boolean") {
+      push(errors, `${label} has a car flag TaxTrack cannot read.`);
+      return;
+    }
+    assets.push({
+      id,
+      description,
+      purchased,
+      cost: item.cost,
+      effectiveLifeYears: item.effectiveLifeYears,
+      workUsePercent: item.workUsePercent,
+      method,
+      notes,
+      ...(item.logbookCar ? { logbookCar: true } : {}),
+    });
   });
   return assets;
+}
+
+function validateLogbook(value: unknown, year: FinancialYear, errors: string[]): CarLogbook | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    push(errors, `${year.label} has a logbook TaxTrack cannot read.`);
+    return undefined;
+  }
+  const started = value.started;
+  if (typeof started !== "string" || !isRealIsoDate(started) || !isWithin(started, year.start, year.end)) {
+    push(errors, `${year.label} needs a logbook start date inside the income year.`);
+    return undefined;
+  }
+  const opening = value.openingKilometres;
+  if (typeof opening !== "number" || !Number.isInteger(opening) || opening < 0 || opening > 2_000_000) {
+    push(errors, `${year.label} needs an opening odometer as a whole number.`);
+    return undefined;
+  }
+  let closingKilometres: number | null = null;
+  if (value.closingKilometres !== undefined && value.closingKilometres !== null) {
+    const closing = value.closingKilometres;
+    if (typeof closing !== "number" || !Number.isInteger(closing) || closing <= opening || closing > 2_000_000) {
+      push(errors, `${year.label} needs a closing odometer higher than the opening reading.`);
+      return undefined;
+    }
+    closingKilometres = closing;
+  }
+  return { started, openingKilometres: opening, closingKilometres };
 }
 
 export function validateBackup(value: unknown): ValidationResult {
@@ -593,6 +722,11 @@ export function validateBackup(value: unknown): ValidationResult {
     if (typeof value.settings.rentalProperties !== "boolean") push(errors, "The rental properties switch must be on or off.");
     else rentalProperties = value.settings.rentalProperties;
   }
+  let holidayState: AustralianState = "QLD";
+  if (isRecord(value.settings) && value.settings.holidayState !== undefined) {
+    if (!isAustralianState(value.settings.holidayState)) push(errors, "Choose a state or territory for public holidays.");
+    else holidayState = value.settings.holidayState;
+  }
 
   const properties = validateProperties(value.properties, errors);
   const assets = validateAssets(value.assets, errors);
@@ -623,11 +757,19 @@ export function validateBackup(value: unknown): ValidationResult {
       if (raw.wfhMethod !== "fixed" && raw.wfhMethod !== "actual") push(errors, `${year.label} needs fixed or actual for working from home.`);
       else wfhMethod = raw.wfhMethod;
     }
+    let carMethod: CarMethod = "cents";
+    if (raw.carMethod !== undefined) {
+      if (raw.carMethod !== "cents" && raw.carMethod !== "logbook") push(errors, `${year.label} needs cents or logbook for the car.`);
+      else carMethod = raw.carMethod;
+    }
+    const logbook = validateLogbook(raw.logbook, year, errors);
     years[year.id] = {
       dayLogs: validateDays(raw.dayLogs, year, errors),
       expenses: validateExpenses(raw.expenses, year, errors),
       rentalExpenses: validateRentalExpenses(raw.rentalExpenses, year, propertyIds, errors),
       wfhMethod,
+      carMethod,
+      ...(logbook ? { logbook } : {}),
     };
   }
 
@@ -639,7 +781,7 @@ export function validateBackup(value: unknown): ValidationResult {
       version: 1,
       ...(typeof value.exportedAt === "string" ? { exportedAt: value.exportedAt } : {}),
       activeYear,
-      settings: { defaultWfhHours, rentalProperties, workDays },
+      settings: { defaultWfhHours, rentalProperties, workDays, holidayState },
       properties,
       assets,
       years,

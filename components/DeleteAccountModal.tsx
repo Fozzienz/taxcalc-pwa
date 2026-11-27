@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { DELETE_ACCOUNT_PHRASE, deleteAccountAndData } from "@/lib/deleteAccount";
 import { supabase } from "@/lib/supabase/client";
-import { buttonClass, Field, inputClass, Modal } from "@/components/ui";
+import { buttonClass, Field, Modal, TextBox } from "@/components/ui";
 
 export function DeleteAccountModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState<string | null>(null);
@@ -42,8 +42,8 @@ export function DeleteAccountModal({ onClose }: { onClose: () => void }) {
       {email ? <p className="mt-3 text-sm text-fog">Account: <span className="text-paper">{email}</span></p> : null}
       <div className="mt-4 space-y-3">
         <Field label="Type DELETE MY TAXTRACK" hint="Capitals, with the spaces.">
-          <input
-            className={`${inputClass} font-mono`}
+          <TextBox
+            className="font-mono"
             value={phrase}
             autoComplete="off"
             spellCheck={false}
@@ -51,7 +51,7 @@ export function DeleteAccountModal({ onClose }: { onClose: () => void }) {
           />
         </Field>
         <Field label="Password" required>
-          <input className={inputClass} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+          <TextBox type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
         </Field>
       </div>
       {error ? <p className="mt-3 text-sm text-rose">{error}</p> : null}
